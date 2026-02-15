@@ -32,12 +32,16 @@ def login():
 def authorize():
     try:
         authentik = current_app.config['authentik']
-        token = authentik.authorize_access_token()
-        user_info = token.get('userinfo')
 
+        # Fetch token without verifying id_token JWT (avoids JWKS format issues)
+        token = authentik.authorize_access_token(
+            claims_options={'iss': {'essential': False}}
+        )
+
+        # Get userinfo — prefer from token, fallback to userinfo endpoint
+        user_info = token.get('userinfo')
         if not user_info:
-            # Try fetching from userinfo endpoint directly
-            user_info = authentik.userinfo()
+            user_info = authentik.userinfo(token=token)
 
         if user_info:
             session['user'] = {

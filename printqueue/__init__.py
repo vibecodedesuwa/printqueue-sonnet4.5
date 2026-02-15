@@ -54,7 +54,10 @@ def create_app(config_class=Config):
         client_id=config_class.AUTHENTIK_CLIENT_ID,
         client_secret=config_class.AUTHENTIK_CLIENT_SECRET,
         server_metadata_url=config_class.AUTHENTIK_METADATA_URL,
-        client_kwargs={'scope': 'openid email profile'}
+        client_kwargs={
+            'scope': 'openid email profile',
+            'token_endpoint_auth_method': 'client_secret_post',
+        }
     )
     app.config['oauth'] = oauth
     app.config['authentik'] = authentik
