@@ -108,11 +108,11 @@ def logout():
 @login_required
 def dashboard():
     username = session['user']['username']
-    jobs = get_user_jobs(username)
     db = current_app.config['db']
+    jobs = get_user_jobs(username, db=db)
 
     # Get unclaimed jobs for the claim system
-    all_jobs = get_all_jobs()
+    all_jobs = get_all_jobs(db=db)
     unclaimed_job_ids = db.get_unclaimed_jobs()
 
     # Build unclaimed jobs list, also check auto-match
@@ -155,8 +155,8 @@ def admin():
         flash('Access denied — Admin privileges required', 'error')
         return redirect(url_for('web.dashboard'))
 
-    jobs = get_all_jobs()
     db = current_app.config['db']
+    jobs = get_all_jobs(db=db)
     api_keys = db.list_api_keys()
     known_devices = db.list_known_devices()
     email_mappings = db.list_email_mappings()
@@ -174,11 +174,12 @@ def admin():
 @web_bp.route('/api/jobs')
 @login_required
 def api_jobs():
+    db = current_app.config['db']
     if is_admin() and request.args.get('all') == 'true':
-        jobs = get_all_jobs()
+        jobs = get_all_jobs(db=db)
     else:
         username = session['user']['username']
-        jobs = get_user_jobs(username)
+        jobs = get_user_jobs(username, db=db)
     return jsonify(jobs)
 
 
@@ -247,7 +248,8 @@ def kiosk_auth():
 @web_bp.route('/kiosk/dashboard')
 @kiosk_required
 def kiosk_dashboard():
-    jobs = get_all_jobs()
+    db = current_app.config['db']
+    jobs = get_all_jobs(db=db)
     printer = get_printer_status()
     return render_template('kiosk.html', jobs=jobs, printer=printer)
 
@@ -255,7 +257,8 @@ def kiosk_dashboard():
 @web_bp.route('/kiosk/api/jobs')
 @kiosk_required
 def kiosk_api_jobs():
-    jobs = get_all_jobs()
+    db = current_app.config['db']
+    jobs = get_all_jobs(db=db)
     printer = get_printer_status()
     return jsonify({'jobs': jobs, 'printer': printer})
 

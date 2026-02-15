@@ -35,11 +35,12 @@ def list_jobs():
     user_filter = request.args.get('user')
     state_filter = request.args.get('state')
     unclaimed_only = request.args.get('unclaimed', '').lower() == 'true'
+    db = current_app.config['db']
 
     if user_filter:
-        jobs = get_user_jobs(user_filter)
+        jobs = get_user_jobs(user_filter, db=db)
     else:
-        jobs = get_all_jobs()
+        jobs = get_all_jobs(db=db)
 
     if state_filter:
         jobs = [j for j in jobs if j['state_text'].lower() == state_filter.lower()]
@@ -72,7 +73,7 @@ def list_unclaimed_jobs():
     """List unclaimed jobs from IPP/AirPrint submissions"""
     db = current_app.config['db']
     unclaimed_ids = db.get_unclaimed_jobs()
-    all_jobs = get_all_jobs()
+    all_jobs = get_all_jobs(db=db)
     unclaimed = [j for j in all_jobs if j['id'] in unclaimed_ids]
 
     return jsonify({

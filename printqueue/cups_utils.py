@@ -39,8 +39,10 @@ def get_printer_state_text(state):
     return states.get(state, 'Unknown')
 
 
-def get_user_jobs(username=None):
-    """Get all print jobs, optionally filtered by username"""
+def get_user_jobs(username=None, db=None):
+    """Get all print jobs, optionally filtered by username.
+    If db is provided, overlays real username from app database.
+    """
     try:
         conn = get_cups_connection()
         jobs = conn.getJobs(which_jobs='not-completed')
@@ -54,8 +56,21 @@ def get_user_jobs(username=None):
             except Exception:
                 pass
 
-            if username and job_info.get('job-originating-user-name') != username:
-                continue
+            # Get real username from app database if available
+            display_user = job_info.get('job-originating-user-name', 'Unknown')
+            if db:
+                try:
+                    meta = db.get_job_meta(job_id)
+                    if meta and meta.get('submitted_by'):
+                        display_user = meta['submitted_by']
+                except Exception:
+                    pass
+
+            if username and display_user != username:
+                # Also check CUPS username for backward compat
+                cups_user = job_info.get('job-originating-user-name', '')
+                if cups_user != username:
+                    continue
 
             # Handle time — could be int or datetime
             time_created = job_info.get('time-at-creation', 0)
@@ -67,7 +82,7 @@ def get_user_jobs(username=None):
             job_list.append({
                 'id': job_id,
                 'name': job_info.get('job-name', 'Untitled'),
-                'user': job_info.get('job-originating-user-name', 'Unknown'),
+                'user': display_user,
                 'printer': job_info.get('printer-uri', '').split('/')[-1],
                 'state': job_info.get('job-state', 0),
                 'state_text': get_job_state_text(job_info.get('job-state', 0)),
@@ -84,9 +99,9 @@ def get_user_jobs(username=None):
         return []
 
 
-def get_all_jobs():
+def get_all_jobs(db=None):
     """Get all jobs without filtering"""
-    return get_user_jobs(username=None)
+    return get_user_jobs(username=None, db=db)
 
 
 def release_job(job_id, username=None, is_admin=False):
@@ -173,7 +188,9 @@ def list_printers():
 
 
 def submit_print_job(file_path, title='Untitled', printer_name=None, options=None, requesting_user=None):
-    """Submit a file to CUPS as a held print job"""
+    """Submit a file to CUPS as a held print job.
+    requesting_user is stored in app DB, not in CUPS (requires root).
+    """
     if printer_name is None:
         printer_name = PRINTER_NAME
     if options is None:
@@ -184,24 +201,9 @@ def submit_print_job(file_path, title='Untitled', printer_name=None, options=Non
 
     try:
         conn = get_cups_connection()
-
-        # Set the requesting user so CUPS tags the job correctly
-        if requesting_user:
-            cups.setUser(requesting_user)
-
         job_id = conn.printFile(printer_name, file_path, title, options)
-
-        # Restore to default
-        if requesting_user:
-            cups.setUser('root')
-
         return True, job_id
     except Exception as e:
-        # Restore user on error too
-        try:
-            cups.setUser('root')
-        except Exception:
-            pass
         return False, str(e)
 
 
