@@ -3,7 +3,7 @@
 Print Queue Manager — Entry Point
 """
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(override=True)
 
 from printqueue import create_app
 
