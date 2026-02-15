@@ -35,6 +35,10 @@ def authorize():
         token = authentik.authorize_access_token()
         user_info = token.get('userinfo')
 
+        if not user_info:
+            # Try fetching from userinfo endpoint directly
+            user_info = authentik.userinfo()
+
         if user_info:
             session['user'] = {
                 'username': user_info.get('preferred_username') or user_info.get('email'),
@@ -45,9 +49,13 @@ def authorize():
             flash(f"Welcome, {session['user']['name']}!", 'success')
             return redirect(url_for('web.dashboard'))
         else:
+            print(f"[AUTH ERROR] No userinfo in token. Token keys: {list(token.keys())}")
             flash('Failed to get user information', 'error')
             return redirect(url_for('web.login'))
     except Exception as e:
+        import traceback
+        print(f"[AUTH ERROR] OAuth callback failed: {e}")
+        traceback.print_exc()
         flash(f'Authentication error: {str(e)}', 'error')
         return redirect(url_for('web.login'))
 
