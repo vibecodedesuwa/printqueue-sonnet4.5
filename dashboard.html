@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Print Queue Manager{% endblock %}
+
+{% block content %}
+<div class="nav-tabs">
+    <a href="{{ url_for('dashboard') }}" class="nav-tab active">My Jobs</a>
+    {% if is_admin %}
+    <a href="{{ url_for('admin') }}" class="nav-tab">All Jobs (Admin)</a>
+    {% endif %}
+</div>
+
+<div class="status-bar">
+    <div class="status-indicator">
+        <div class="status-dot online"></div>
+        <span>Printer Online</span>
+    </div>
+    <div>
+        <span id="job-count">{{ jobs|length }} job(s) in queue</span>
+    </div>
+</div>
+
+<h2 style="margin-bottom: 20px;">My Print Jobs</h2>
+
+{% if jobs %}
+<table id="jobs-table">
+    <thead>
+        <tr>
+            <th>Job ID</th>
+            <th>Document Name</th>
+            <th>Status</th>
+            <th>Pages</th>
+            <th>Size</th>
+            <th>Submitted</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for job in jobs %}
+        <tr data-job-id="{{ job.id }}">
+            <td><strong>#{{ job.id }}</strong></td>
+            <td>{{ job.name }}</td>
+            <td>
+                <span class="badge badge-{{ job.state_text.lower() }}">
+                    {{ job.state_text }}
+                </span>
+            </td>
+            <td>{{ job.pages if job.pages > 0 else 'N/A' }}</td>
+            <td>{{ (job.size / 1024)|round(2) }} MB</td>
+            <td>{{ job.time }}</td>
+            <td>
+                <div class="action-buttons">
+                    {% if job.state in [3, 4] %}
+                    <button onclick="releaseJob({{ job.id }})" class="btn btn-success btn-small">
+                        Release
+                    </button>
+                    {% endif %}
+                    {% if job.state not in [7, 8, 9] %}
+                    <button onclick="cancelJob({{ job.id }})" class="btn btn-danger btn-small">
+                        Cancel
+                    </button>
+                    {% endif %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">📄</div>
+    <h3>No print jobs</h3>
+    <p>You don't have any jobs in the queue right now.</p>
+</div>
+{% endif %}
+
+<div style="margin-top: 30px; padding: 20px; background: #f9fafb; border-radius: 5px;">
+    <h3 style="margin-bottom: 10px;">💡 How to Print</h3>
+    <ol style="margin-left: 20px; color: #666;">
+        <li>Print from any device using the shared printer</li>
+        <li>Your job will appear here in "Held" status</li>
+        <li>Click "Release" to start printing</li>
+        <li>Monitor progress in real-time</li>
+    </ol>
+</div>
+
+<script>
+function releaseJob(jobId) {
+    if (!confirm('Release this print job?')) return;
+    
+    const button = event.target;
+    button.disabled = true;
+    button.innerHTML = '<span class="loading"></span>';
+    
+    fetch(`/api/job/${jobId}/release`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ Job released! Printing will start shortly.');
+            location.reload();
+        } else {
+            alert('❌ Error: ' + data.error);
+            button.disabled = false;
+            button.innerHTML = 'Release';
+        }
+    })
+    .catch(error => {
+        alert('❌ Error: ' + error);
+        button.disabled = false;
+        button.innerHTML = 'Release';
+    });
+}
+
+function cancelJob(jobId) {
+    if (!confirm('Cancel this print job? This cannot be undone.')) return;
+    
+    const button = event.target;
+    button.disabled = true;
+    button.innerHTML = '<span class="loading"></span>';
+    
+    fetch(`/api/job/${jobId}/cancel`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ Job canceled');
+            location.reload();
+        } else {
+            alert('❌ Error: ' + data.error);
+            button.disabled = false;
+            button.innerHTML = 'Cancel';
+        }
+    })
+    .catch(error => {
+        alert('❌ Error: ' + error);
+        button.disabled = false;
+        button.innerHTML = 'Cancel';
+    });
+}
+</script>
+{% endblock %}

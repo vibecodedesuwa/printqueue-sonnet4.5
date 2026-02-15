@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  print-queue-manager:
+    build: .
+    container_name: print-queue-manager
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/data
+      - /var/run/cups/cups.sock:/var/run/cups/cups.sock
+    environment:
+      - SECRET_KEY=${SECRET_KEY}
+      - AUTHENTIK_CLIENT_ID=${AUTHENTIK_CLIENT_ID}
+      - AUTHENTIK_CLIENT_SECRET=${AUTHENTIK_CLIENT_SECRET}
+      - AUTHENTIK_METADATA_URL=${AUTHENTIK_METADATA_URL}
+      - PRINTER_NAME=${PRINTER_NAME:-HP_Smart_Tank_515}
+      - ADMIN_GROUPS=${ADMIN_GROUPS:-admins,print-admins}
+      - ADMIN_USERS=${ADMIN_USERS:-admin}
+    depends_on:
+      - cups
+    networks:
+      - print-network
+
+  cups:
+    image: olbat/cupsd:latest
+    container_name: cups-server
+    restart: unless-stopped
+    ports:
+      - "631:631"
+    volumes:
+      - cups-data:/etc/cups
+      - ./ppd:/usr/share/cups/model
+    environment:
+      - CUPSADMIN=admin
+      - CUPSPASSWORD=changeme
+    networks:
+      - print-network
+    privileged: true
+
+volumes:
+  cups-data:
+
+networks:
+  print-network:
+    driver: bridge
