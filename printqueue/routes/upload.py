@@ -71,7 +71,8 @@ def upload_file():
 
     # Submit to CUPS
     printer_name = current_app.config['PRINTER_NAME']
-    success, result = submit_print_job(converted_path, filename, printer_name, options)
+    username = session['user']['username']
+    success, result = submit_print_job(converted_path, filename, printer_name, options, requesting_user=username)
 
     if success:
         db = current_app.config['db']

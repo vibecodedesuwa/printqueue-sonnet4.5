@@ -25,8 +25,16 @@ def is_admin():
     if isinstance(admin_users, str):
         admin_users = admin_users.split(',')
 
-    return (any(group in admin_groups for group in groups) or
-            user.get('username') in admin_users)
+    # Normalize: strip whitespace & lowercase for comparison
+    admin_groups = [g.strip().lower() for g in admin_groups]
+    admin_users = [u.strip().lower() for u in admin_users]
+    user_groups = [g.strip().lower() if isinstance(g, str) else str(g).lower() for g in groups]
+    username = user.get('username', '').strip().lower()
+
+    print(f"[ADMIN CHECK] username='{username}', user_groups={user_groups}, admin_groups={admin_groups}, admin_users={admin_users}")
+
+    return (any(group in admin_groups for group in user_groups) or
+            username in admin_users)
 
 
 def login_required(f):

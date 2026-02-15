@@ -46,7 +46,7 @@
                     <td>{{ job.name }}</td>
                     <td><span class="badge badge-{{ job.state_text.lower() }}">{{ job.state_text }}</span></td>
                     <td>{{ job.pages if job.pages > 0 else 'N/A' }}</td>
-                    <td>{{ (job.size / 1024)|round(2) }} MB</td>
+                    <td>{{ job.size }} KB</td>
                     <td>{{ job.time }}</td>
                     <td>
                         <div class="action-buttons">
@@ -75,7 +75,7 @@
             <div class="job-card-meta">
                 <span>👤 {{ job.user }}</span>
                 <span>📄 {{ job.pages if job.pages > 0 else 'N/A' }} pg</span>
-                <span>💾 {{ (job.size / 1024)|round(2) }} MB</span>
+                <span>💾 {{ job.size }} KB</span>
                 <span>🕐 {{ job.time }}</span>
             </div>
             <div class="job-card-actions">

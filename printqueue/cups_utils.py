@@ -47,8 +47,22 @@ def get_user_jobs(username=None):
 
         job_list = []
         for job_id, job_info in jobs.items():
+            # Enrich with full attributes (getJobs may return limited data)
+            try:
+                full_attrs = conn.getJobAttributes(job_id)
+                job_info.update(full_attrs)
+            except Exception:
+                pass
+
             if username and job_info.get('job-originating-user-name') != username:
                 continue
+
+            # Handle time — could be int or datetime
+            time_created = job_info.get('time-at-creation', 0)
+            if isinstance(time_created, (int, float)):
+                time_str = datetime.fromtimestamp(time_created).strftime('%Y-%m-%d %H:%M:%S') if time_created > 0 else 'Unknown'
+            else:
+                time_str = str(time_created)
 
             job_list.append({
                 'id': job_id,
@@ -57,16 +71,16 @@ def get_user_jobs(username=None):
                 'printer': job_info.get('printer-uri', '').split('/')[-1],
                 'state': job_info.get('job-state', 0),
                 'state_text': get_job_state_text(job_info.get('job-state', 0)),
-                'pages': job_info.get('job-media-sheets-completed', 0),
-                'time': datetime.fromtimestamp(
-                    job_info.get('time-at-creation', 0)
-                ).strftime('%Y-%m-%d %H:%M:%S'),
+                'pages': job_info.get('job-media-sheets-completed', job_info.get('number-of-documents', 0)),
+                'time': time_str,
                 'size': job_info.get('job-k-octets', 0)
             })
 
         return sorted(job_list, key=lambda x: x['time'], reverse=True)
     except Exception as e:
         print(f"Error getting jobs: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
@@ -158,7 +172,7 @@ def list_printers():
         return []
 
 
-def submit_print_job(file_path, title='Untitled', printer_name=None, options=None):
+def submit_print_job(file_path, title='Untitled', printer_name=None, options=None, requesting_user=None):
     """Submit a file to CUPS as a held print job"""
     if printer_name is None:
         printer_name = PRINTER_NAME
@@ -171,6 +185,21 @@ def submit_print_job(file_path, title='Untitled', printer_name=None, options=Non
     try:
         conn = get_cups_connection()
         job_id = conn.printFile(printer_name, file_path, title, options)
+
+        # Set the job owner to the requesting user
+        if requesting_user:
+            try:
+                conn.setJobHoldUntil(job_id, 'indefinite')
+                conn.getJobAttributes(job_id)
+                # Use lp command to set the correct user
+                import subprocess
+                subprocess.run([
+                    'lp', '-i', str(job_id),
+                    '-o', f'job-originating-user-name={requesting_user}'
+                ], capture_output=True)
+            except Exception:
+                pass  # Best effort — job is still submitted
+
         return True, job_id
     except Exception as e:
         return False, str(e)
