@@ -184,24 +184,24 @@ def submit_print_job(file_path, title='Untitled', printer_name=None, options=Non
 
     try:
         conn = get_cups_connection()
+
+        # Set the requesting user so CUPS tags the job correctly
+        if requesting_user:
+            cups.setUser(requesting_user)
+
         job_id = conn.printFile(printer_name, file_path, title, options)
 
-        # Set the job owner to the requesting user
+        # Restore to default
         if requesting_user:
-            try:
-                conn.setJobHoldUntil(job_id, 'indefinite')
-                conn.getJobAttributes(job_id)
-                # Use lp command to set the correct user
-                import subprocess
-                subprocess.run([
-                    'lp', '-i', str(job_id),
-                    '-o', f'job-originating-user-name={requesting_user}'
-                ], capture_output=True)
-            except Exception:
-                pass  # Best effort — job is still submitted
+            cups.setUser('root')
 
         return True, job_id
     except Exception as e:
+        # Restore user on error too
+        try:
+            cups.setUser('root')
+        except Exception:
+            pass
         return False, str(e)
 
 
