@@ -1,6 +1,6 @@
 # Print Queue Manager - LXC Setup Guide
 
-Complete guide to install and configure the Print Queue Manager with Authentik SSO on Proxmox LXC.
+Complete guide to install and configure PrintQ with all features (Kiosk, API, Email Print, AirPrint/Mopria, Claim System) on Proxmox LXC.
 
 ## 📋 Prerequisites
 
@@ -23,7 +23,7 @@ Complete guide to install and configure the Print Queue Manager with Authentik S
 #    - Hostname: print-server
 #    - Template: Ubuntu 22.04 or Debian 12
 #    - Root password: Set a secure password
-#    - Disk: 8 GB minimum
+#    - Disk: 16 GB minimum (LibreOffice + uploads need space)
 #    - CPU: 2 cores
 #    - Memory: 2048 MB
 #    - Network: Bridge to your network (vmbr0)
@@ -81,8 +81,18 @@ apt install -y \
     gcc \
     git \
     curl \
-    nano
+    nano \
+    avahi-daemon \
+    avahi-utils \
+    libreoffice-writer \
+    libmagic1
 ```
+
+> **New dependencies:**
+>
+> - `avahi-daemon` + `avahi-utils` — AirPrint/Mopria device discovery via mDNS
+> - `libreoffice-writer` — DOCX → PDF conversion for uploaded documents
+> - `libmagic1` — File type detection for upload validation
 
 ### 2.2 Configure CUPS
 
@@ -94,12 +104,21 @@ systemctl start cups
 # Allow network access to CUPS
 cupsctl --remote-any
 cupsctl --share-printers
+cupsctl WebInterface=yes
 
 # Add your user to lpadmin group (if needed)
 usermod -aG lpadmin root
 ```
 
-### 2.3 Configure CUPS to Hold All Jobs by Default
+### 2.3 Enable Avahi (mDNS) for AirPrint/Mopria
+
+```bash
+# Enable and start Avahi
+systemctl enable avahi-daemon
+systemctl start avahi-daemon
+```
+
+### 2.4 Configure CUPS to Hold All Jobs by Default
 
 ```bash
 # Edit CUPS configuration
@@ -162,6 +181,9 @@ hp-setup -i
 # Set printer to hold all jobs by default
 lpadmin -p HP_Smart_Tank_515 -o job-hold-until=indefinite
 
+# Enable printer sharing for AirPrint
+lpadmin -p HP_Smart_Tank_515 -o printer-is-shared=true
+
 # Make it the default printer
 lpadmin -d HP_Smart_Tank_515
 
@@ -172,6 +194,25 @@ cupsaccept HP_Smart_Tank_515
 # Verify printer status
 lpstat -p HP_Smart_Tank_515
 ```
+
+### 3.4 Setup AirPrint Advertisement
+
+```bash
+# Run the included setup script
+cd /opt/print-queue-manager
+bash scripts/setup-airprint.sh
+
+# Or manually create the Avahi service file:
+cp config/avahi/AirPrint-HP_Smart_Tank_515.service /etc/avahi/services/
+
+# Restart Avahi
+systemctl restart avahi-daemon
+
+# Verify the printer is advertised
+avahi-browse -t _ipp._tcp
+```
+
+After this, iOS devices (AirPrint), Android devices (Mopria/Default Print Service), and macOS will auto-discover the printer on the same network.
 
 ---
 
@@ -184,27 +225,48 @@ lpstat -p HP_Smart_Tank_515
 mkdir -p /opt/print-queue-manager
 cd /opt/print-queue-manager
 
-# Download the application files (you'll need to copy them)
-# For now, we'll create them manually
+# Clone the repository (or copy files)
+git clone https://github.com/vibecodedesuwa/printqueue-sonnet4.5.git .
 ```
 
-### 4.2 Copy Application Files
+### 4.2 Application File Structure
 
-You need to transfer these files to `/opt/print-queue-manager/`:
-- `app.py`
-- `requirements.txt`
-- `templates/base.html`
-- `templates/dashboard.html`
-- `templates/admin.html`
+The application now uses a package structure:
+
+```
+/opt/print-queue-manager/
+├── app.py                        # Entry point
+├── printqueue/                   # Flask application package
+│   ├── __init__.py               # App factory
+│   ├── config.py                 # Environment config
+│   ├── models.py                 # SQLite models
+│   ├── auth.py                   # Auth decorators
+│   ├── cups_utils.py             # CUPS helpers
+│   ├── routes/
+│   │   ├── web.py                # Web routes
+│   │   ├── api_v1.py             # REST API v1
+│   │   └── upload.py             # File upload
+│   ├── services/
+│   │   ├── file_converter.py     # DOCX→PDF
+│   │   └── mail_printer.py       # Email print service
+│   └── swagger/api_v1.yml        # OpenAPI spec
+├── templates/                    # 7 Jinja2 templates
+├── static/                       # PWA manifest, service worker, icons
+├── config/avahi/                 # AirPrint mDNS service files
+├── scripts/setup-airprint.sh     # AirPrint setup automation
+├── data/                         # SQLite DB + uploaded files
+├── requirements.txt
+├── .env
+└── print-queue-manager.service   # Systemd unit file
+```
+
+### 4.3 Create Data Directories
 
 ```bash
-# You can use SCP from your local machine:
-# scp -r /path/to/print-queue-manager/* root@<LXC-IP>:/opt/print-queue-manager/
-
-# Or create them manually using nano
+mkdir -p /opt/print-queue-manager/data/uploads
 ```
 
-### 4.3 Create Python Virtual Environment
+### 4.4 Create Python Virtual Environment
 
 ```bash
 cd /opt/print-queue-manager
@@ -231,6 +293,7 @@ pip install -r requirements.txt
 3. Click **Create** and select **OAuth2/OpenID Provider**
 
 Configure the provider:
+
 ```
 Name: Print Queue Manager
 Authorization flow: default-provider-authorization-implicit-consent
@@ -246,6 +309,7 @@ Redirect URIs: http://<your-lxc-ip>:5000/authorize
 6. Click **Create**
 
 Configure the application:
+
 ```
 Name: Print Queue Manager
 Slug: print-queue
@@ -259,27 +323,55 @@ Provider: (select the provider you just created)
 ```bash
 cd /opt/print-queue-manager
 
-# Create .env file
-nano .env
+# Copy the example env file
+cp .env.example .env
 
-# Add the following (replace with your actual values):
-SECRET_KEY=$(openssl rand -hex 32)
+# Edit with your values
+nano .env
+```
+
+Set the following variables:
+
+```bash
+# Flask
+SECRET_KEY=<run: openssl rand -hex 32>
+
+# Authentik SSO
 AUTHENTIK_CLIENT_ID=your-client-id-from-authentik
 AUTHENTIK_CLIENT_SECRET=your-client-secret-from-authentik
 AUTHENTIK_METADATA_URL=https://your-authentik-domain.com/application/o/print-queue/.well-known/openid-configuration
+
+# Printer
 PRINTER_NAME=HP_Smart_Tank_515
+
+# Admin
 ADMIN_GROUPS=admins,print-admins
 ADMIN_USERS=admin,yourusername
-FLASK_ENV=production
 
-# Save and exit (Ctrl+X, Y, Enter)
+# Kiosk Mode
+KIOSK_PIN=1234
+
+# Email Print (set MAIL_ENABLED=true to activate)
+MAIL_ENABLED=false
+MAIL_IMAP_HOST=imap.your-domain.com
+MAIL_IMAP_PORT=993
+MAIL_IMAP_USER=print@your-domain.com
+MAIL_IMAP_PASS=your-email-password
+MAIL_IMAP_FOLDER=INBOX
+MAIL_SMTP_HOST=smtp.your-domain.com
+MAIL_SMTP_PORT=587
+MAIL_SMTP_USER=print@your-domain.com
+MAIL_SMTP_PASS=your-email-password
+
+# Claim System
+UNCLAIMED_JOB_TIMEOUT=24
+
+# Database & Uploads
+DATABASE_PATH=data/printqueue.db
+UPLOAD_FOLDER=data/uploads
 ```
 
-**Important:** Replace:
-- `your-client-id-from-authentik` with the Client ID from Authentik
-- `your-client-secret-from-authentik` with the Client Secret from Authentik
-- `your-authentik-domain.com` with your actual Authentik domain
-- `yourusername` with your Authentik username
+**Important:** Replace all placeholder values with your actual credentials.
 
 ---
 
@@ -307,9 +399,28 @@ python3 app.py
 ### 6.2 Create Systemd Service
 
 ```bash
-# Copy the service file
-cp print-queue-manager.service /etc/systemd/system/
+cat > /etc/systemd/system/print-queue-manager.service << 'EOF'
+[Unit]
+Description=Print Queue Manager
+After=network.target cups.service avahi-daemon.service
+Requires=cups.service
 
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/print-queue-manager
+Environment=PATH=/opt/print-queue-manager/venv/bin:/usr/bin:/bin
+EnvironmentFile=/opt/print-queue-manager/.env
+ExecStart=/opt/print-queue-manager/venv/bin/gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 120 app:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+```bash
 # Reload systemd
 systemctl daemon-reload
 
@@ -331,14 +442,15 @@ journalctl -u print-queue-manager -f
 ### 7.1 Configure Firewall (if enabled)
 
 ```bash
-# Allow CUPS web interface
+# Allow CUPS web interface + IPP printing
 ufw allow 631/tcp
+ufw allow 631/udp
 
 # Allow Print Queue Manager
 ufw allow 5000/tcp
 
-# Allow IPP printing
-ufw allow 631/udp
+# Allow mDNS (AirPrint/Mopria device discovery)
+ufw allow 5353/udp
 ```
 
 ### 7.2 Optional: Setup Reverse Proxy with Nginx
@@ -349,8 +461,6 @@ apt install -y nginx
 
 # Create nginx config
 nano /etc/nginx/sites-available/print-queue
-
-# Add this configuration:
 ```
 
 ```nginx
@@ -358,12 +468,20 @@ server {
     listen 80;
     server_name print.yourdomain.com;
 
+    client_max_body_size 50M;  # Allow large file uploads
+
     location / {
         proxy_pass http://localhost:5000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Service worker must be served from root
+    location /sw.js {
+        proxy_pass http://localhost:5000/static/sw.js;
+        add_header Service-Worker-Allowed "/";
     }
 }
 ```
@@ -381,9 +499,17 @@ systemctl restart nginx
 
 ---
 
-## 👥 Part 8: Configure Client Computers
+## � Part 8: Configure Client Devices
 
-### 8.1 Windows Clients
+### 8.1 iPhone / iPad (AirPrint — Zero Config)
+
+AirPrint is built-in — the printer auto-appears in the Print dialog if on the same network. See `CLIENT_PRINT_GUIDE.md` for details.
+
+### 8.2 Android (Mopria)
+
+Android 8+ auto-discovers via Default Print Service. Older versions need the Mopria app. See `CLIENT_PRINT_GUIDE.md`.
+
+### 8.3 Windows Clients
 
 ```powershell
 # Add printer via PowerShell (as Administrator)
@@ -397,7 +523,7 @@ Add-Printer -Name "Print Queue" -ConnectionName "http://<lxc-ip>:631/printers/HP
 # 5. Enter: http://<lxc-ip>:631/printers/HP_Smart_Tank_515
 ```
 
-### 8.2 macOS Clients
+### 8.4 macOS Clients
 
 ```bash
 # System Preferences → Printers & Scanners
@@ -410,7 +536,7 @@ Add-Printer -Name "Print Queue" -ConnectionName "http://<lxc-ip>:631/printers/HP
 # Click Add
 ```
 
-### 8.3 Linux Clients
+### 8.5 Linux Clients
 
 ```bash
 # Add printer
@@ -419,104 +545,195 @@ lpadmin -p PrintQueue -v ipp://<lxc-ip>:631/printers/HP_Smart_Tank_515 -E
 # Or use system-config-printer GUI
 ```
 
+### 8.6 Web Upload (Any Device)
+
+Open `http://<lxc-ip>:5000/upload` in any browser, log in, and drag-and-drop a file.
+
+### 8.7 Email Print
+
+Send attachments to your configured print email address (requires `MAIL_ENABLED=true` in `.env`).
+
 ---
 
-## ✅ Part 9: Testing
+## 🔑 Part 9: Initial Setup After First Login
 
-### 9.1 Test Print Flow
+### 9.1 Create Your First API Key
+
+1. Log in as admin at `http://<lxc-ip>:5000`
+2. Go to **Admin** → **API Keys** tab
+3. Click **+ New Key**, set name and permissions
+4. Copy the key — it won't be shown again
+
+### 9.2 Map Your Devices (Claim System)
+
+When you print from a phone via AirPrint/Mopria, the CUPS username will be something like "iPhone" or "Galaxy". Map it:
+
+1. Print a test page from your phone
+2. Check the **Admin** → **All Jobs** tab for the CUPS username
+3. Go to **Admin** → **Device Mapping** tab
+4. Click **+ Add Mapping** and enter the CUPS username → your Authentik username
+
+Future jobs from that device will auto-assign to you.
+
+### 9.3 Map Email Addresses (Email Print)
+
+If email printing is enabled:
+
+1. Go to **Admin** → **Email Mapping** tab
+2. Click **+ Add Mapping** and map email addresses to usernames
+
+### 9.4 Test Kiosk Mode
+
+1. Open `http://<lxc-ip>:5000/kiosk` on a phone/tablet
+2. Enter the PIN (default: `1234`, set via `KIOSK_PIN` env var)
+3. Use the Kiosk to approve/deny jobs with big touch buttons
+
+---
+
+## ✅ Part 10: Testing
+
+### 10.1 Test Print Flow
 
 1. **From a client computer:**
+
    ```bash
-   # Print a test page
    echo "Test print from $(hostname)" | lpr -P PrintQueue
    ```
 
 2. **Access the web interface:**
    - Open browser: `http://<lxc-ip>:5000`
-   - You'll be redirected to Authentik
-   - Log in with your credentials
-   - You should see your print job in "Held" status
+   - Log in with Authentik
+   - You should see your job in "Held" status
 
 3. **Release the job:**
-   - Click "Release" button
-   - The printer should start printing
+   - Click "✓ Release" button → printer starts printing
 
-### 9.2 Test Admin Access
+### 10.2 Test API
 
-1. Log in as admin user
-2. Click "All Jobs (Admin)" tab
-3. You should see all users' jobs
-4. Test releasing and canceling jobs
+```bash
+# Health check (no auth)
+curl http://<lxc-ip>:5000/api/v1/health
+
+# List jobs
+curl -H "Authorization: Bearer pq_your-api-key" http://<lxc-ip>:5000/api/v1/jobs
+
+# Submit a print job
+curl -X POST -H "Authorization: Bearer pq_your-api-key" \
+  -F "file=@document.pdf" \
+  http://<lxc-ip>:5000/api/v1/print
+```
+
+### 10.3 Test AirPrint Discovery
+
+```bash
+# Verify the printer is advertised via mDNS
+avahi-browse -t _ipp._tcp
+
+# Should show your printer
+```
+
+### 10.4 Test Web Upload
+
+1. Go to `http://<lxc-ip>:5000/upload`
+2. Drag a PDF/DOCX/image onto the drop zone
+3. Set print options → Submit
+4. Check dashboard for the new held job
 
 ---
 
-## 🔍 Part 10: Troubleshooting
+## 🔍 Part 11: Troubleshooting
 
 ### Common Issues
 
 **Printer not detected:**
+
 ```bash
-# Check USB connection
 lsusb | grep -i hp
-
-# Check CUPS sees the printer
 lpstat -p -d
-
-# Restart CUPS
 systemctl restart cups
 ```
 
-**Jobs not appearing in queue:**
-```bash
-# Check CUPS logs
-tail -f /var/log/cups/error_log
+**AirPrint not discovered on iOS/Android:**
 
-# Verify printer is set to hold jobs
+```bash
+# Check Avahi is running
+systemctl status avahi-daemon
+
+# Check mDNS service file exists
+ls /etc/avahi/services/
+
+# Check UDP 5353 is open
+ss -ulnp | grep 5353
+
+# Restart Avahi
+systemctl restart avahi-daemon
+```
+
+**Jobs not appearing in queue:**
+
+```bash
+tail -f /var/log/cups/error_log
 lpstat -p HP_Smart_Tank_515 -l
 ```
 
 **Authentik login fails:**
+
 ```bash
-# Check environment variables
 cat /opt/print-queue-manager/.env
-
-# Verify Authentik metadata URL is accessible
 curl https://your-authentik-domain.com/application/o/print-queue/.well-known/openid-configuration
-
-# Check application logs
 journalctl -u print-queue-manager -f
 ```
 
-**Permission errors:**
-```bash
-# Ensure CUPS socket is accessible
-ls -la /var/run/cups/cups.sock
+**File upload fails / DOCX conversion errors:**
 
-# Check app can access CUPS
-python3 -c "import cups; print(cups.Connection().getPrinters())"
+```bash
+# Check LibreOffice is installed
+libreoffice --version
+
+# Check upload folder permissions
+ls -la /opt/print-queue-manager/data/uploads/
+```
+
+**Email print not working:**
+
+```bash
+# Verify MAIL_ENABLED=true in .env
+# Check IMAP connection
+python3 -c "
+from imapclient import IMAPClient
+c = IMAPClient('imap.your-domain.com', ssl=True)
+c.login('print@your-domain.com', 'your-password')
+print(c.select_folder('INBOX'))
+"
+```
+
+**Database errors:**
+
+```bash
+# Check database exists and is writable
+ls -la /opt/print-queue-manager/data/printqueue.db
+
+# Reset database (⚠️ deletes all API keys and mappings)
+rm /opt/print-queue-manager/data/printqueue.db
+systemctl restart print-queue-manager
 ```
 
 ### Enable Debug Logging
 
 ```bash
-# Edit .env
 nano /opt/print-queue-manager/.env
-
-# Change to:
+# Add:
 FLASK_ENV=development
 
-# Restart service
 systemctl restart print-queue-manager
-
-# Watch logs
 journalctl -u print-queue-manager -f
 ```
 
 ---
 
-## 🎯 Part 11: Final Configuration
+## 🎯 Part 12: Final Configuration
 
-### 11.1 Set Static IP for LXC
+### 12.1 Set Static IP for LXC
 
 ```bash
 # In Proxmox host
@@ -526,7 +743,7 @@ nano /etc/pve/lxc/100.conf
 net0: name=eth0,bridge=vmbr0,ip=192.168.1.100/24,gw=192.168.1.1
 ```
 
-### 11.2 Configure Print Queue Groups in Authentik
+### 12.2 Configure Groups in Authentik
 
 1. Go to Authentik → **Directory** → **Groups**
 2. Create groups:
@@ -534,7 +751,7 @@ net0: name=eth0,bridge=vmbr0,ip=192.168.1.100/24,gw=192.168.1.1
    - `print-admins` (admin users)
 3. Assign users to appropriate groups
 
-### 11.3 Update Admin Configuration
+### 12.3 Update Admin Configuration
 
 ```bash
 nano /opt/print-queue-manager/.env
@@ -549,39 +766,44 @@ systemctl restart print-queue-manager
 
 ---
 
-## 📊 Part 12: Monitoring and Maintenance
+## 📊 Part 13: Monitoring and Maintenance
 
 ### View Application Logs
 
 ```bash
-# Real-time logs
-journalctl -u print-queue-manager -f
-
-# Last 100 lines
-journalctl -u print-queue-manager -n 100
-
-# Today's logs
+journalctl -u print-queue-manager -f        # Real-time
+journalctl -u print-queue-manager -n 100     # Last 100 lines
 journalctl -u print-queue-manager --since today
 ```
 
 ### View CUPS Logs
 
 ```bash
-# Error log
 tail -f /var/log/cups/error_log
-
-# Access log
 tail -f /var/log/cups/access_log
 ```
 
 ### Backup Configuration
 
 ```bash
-# Backup print queue manager
-tar -czf print-queue-backup-$(date +%Y%m%d).tar.gz /opt/print-queue-manager
+# Backup everything (app + database + uploads + CUPS)
+tar -czf print-queue-backup-$(date +%Y%m%d).tar.gz \
+    /opt/print-queue-manager/data \
+    /opt/print-queue-manager/.env \
+    /etc/cups \
+    /etc/avahi/services
+```
 
-# Backup CUPS configuration
-tar -czf cups-backup-$(date +%Y%m%d).tar.gz /etc/cups
+### Update the Application
+
+```bash
+cd /opt/print-queue-manager
+git pull origin main
+
+source venv/bin/activate
+pip install -r requirements.txt
+
+systemctl restart print-queue-manager
 ```
 
 ---
@@ -590,37 +812,33 @@ tar -czf cups-backup-$(date +%Y%m%d).tar.gz /etc/cups
 
 Your print queue management system is now ready! Users can:
 
-1. ✅ Print from any device
+1. ✅ Print from any device (iPhone, Android, Windows, macOS, Linux)
 2. ✅ Log in with Authentik SSO
-3. ✅ See their jobs in the web interface
-4. ✅ Release jobs to print
-5. ✅ Cancel unwanted jobs
-6. ✅ Admins can manage all users' jobs
+3. ✅ See their jobs in the web dashboard
+4. ✅ Upload files directly via drag-and-drop
+5. ✅ Print via email
+6. ✅ Release/cancel jobs from dashboard or kiosk
+7. ✅ Use the REST API for automation
+8. ✅ Claim jobs submitted from mobile devices
+9. ✅ Admins manage API keys, device mappings, email mappings
 
 **Access URLs:**
-- Print Queue Manager: `http://<lxc-ip>:5000`
-- CUPS Web Interface: `http://<lxc-ip>:631`
 
-**Default Admin Credentials (CUPS):**
-- Username: root
-- Password: <your-lxc-root-password>
+| URL                             | Purpose                        |
+| ------------------------------- | ------------------------------ |
+| `http://<lxc-ip>:5000`          | Dashboard (SSO login)          |
+| `http://<lxc-ip>:5000/kiosk`    | Kiosk Mode (PIN: `1234`)       |
+| `http://<lxc-ip>:5000/upload`   | Upload & Print                 |
+| `http://<lxc-ip>:5000/api/docs` | API Documentation (Swagger UI) |
+| `http://<lxc-ip>:631`           | CUPS Web Interface             |
 
 ---
 
-## 📚 Additional Resources
-
-- CUPS Documentation: https://www.cups.org/doc/
-- Authentik Documentation: https://docs.goauthentik.io/
-- HPLIP Documentation: https://developers.hp.com/hp-linux-imaging-and-printing
-
-## 🆘 Need Help?
-
-Common commands for quick reference:
+## 🆘 Quick Reference
 
 ```bash
-# Restart everything
-systemctl restart cups
-systemctl restart print-queue-manager
+# Restart all services
+systemctl restart cups avahi-daemon print-queue-manager
 
 # Check printer status
 lpstat -p -d
@@ -631,9 +849,20 @@ lpstat -o
 # Clear all jobs (emergency)
 cancel -a
 
-# Check if printer is online
-lpinfo -v
+# Check AirPrint advertisement
+avahi-browse -t _ipp._tcp
 
 # Test print
 echo "Test" | lpr -P HP_Smart_Tank_515
+
+# API health check
+curl http://localhost:5000/api/v1/health
 ```
+
+## 📚 Additional Resources
+
+- CUPS Documentation: https://www.cups.org/doc/
+- Authentik Documentation: https://docs.goauthentik.io/
+- HPLIP Documentation: https://developers.hp.com/hp-linux-imaging-and-printing
+- Avahi Documentation: https://www.avahi.org/
+- Client Setup: See `CLIENT_PRINT_GUIDE.md` in the project root
