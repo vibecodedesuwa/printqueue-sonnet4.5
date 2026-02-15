@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   print-queue-manager:
@@ -8,7 +8,7 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./data:/data
+      - ./data:/app/data
       - /var/run/cups/cups.sock:/var/run/cups/cups.sock
     environment:
       - SECRET_KEY=${SECRET_KEY}
@@ -18,6 +18,22 @@ services:
       - PRINTER_NAME=${PRINTER_NAME:-HP_Smart_Tank_515}
       - ADMIN_GROUPS=${ADMIN_GROUPS:-admins,print-admins}
       - ADMIN_USERS=${ADMIN_USERS:-admin}
+      - KIOSK_PIN=${KIOSK_PIN:-1234}
+      - DATABASE_PATH=data/printqueue.db
+      - UPLOAD_FOLDER=data/uploads
+      # Email Print (optional)
+      - MAIL_ENABLED=${MAIL_ENABLED:-false}
+      - MAIL_IMAP_HOST=${MAIL_IMAP_HOST:-}
+      - MAIL_IMAP_PORT=${MAIL_IMAP_PORT:-993}
+      - MAIL_IMAP_USER=${MAIL_IMAP_USER:-}
+      - MAIL_IMAP_PASS=${MAIL_IMAP_PASS:-}
+      - MAIL_IMAP_FOLDER=${MAIL_IMAP_FOLDER:-INBOX}
+      - MAIL_SMTP_HOST=${MAIL_SMTP_HOST:-}
+      - MAIL_SMTP_PORT=${MAIL_SMTP_PORT:-587}
+      - MAIL_SMTP_USER=${MAIL_SMTP_USER:-}
+      - MAIL_SMTP_PASS=${MAIL_SMTP_PASS:-}
+      # Claim system
+      - UNCLAIMED_JOB_TIMEOUT=${UNCLAIMED_JOB_TIMEOUT:-24}
     depends_on:
       - cups
     networks:
@@ -29,9 +45,11 @@ services:
     restart: unless-stopped
     ports:
       - "631:631"
+      - "5353:5353/udp" # mDNS for AirPrint/Mopria discovery
     volumes:
       - cups-data:/etc/cups
       - ./ppd:/usr/share/cups/model
+      - ./config/avahi:/etc/avahi/services # AirPrint service files
     environment:
       - CUPSADMIN=admin
       - CUPSPASSWORD=changeme

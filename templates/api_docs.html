@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation — PrintQ</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+    <style>
+        body { background: #0f0f1a; }
+        .swagger-ui .topbar { display: none; }
+        .swagger-ui { color: #e8e8f0; }
+        .swagger-ui .info .title { color: #e8e8f0; }
+        .swagger-ui .scheme-container { background: #1a1a2e; box-shadow: none; }
+        .swagger-ui .opblock-tag { color: #e8e8f0; border-color: rgba(108, 99, 255, 0.2); }
+        .swagger-ui .btn { border-radius: 8px; }
+        .back-link {
+            display: inline-block; padding: 12px 20px; margin: 16px;
+            color: #6c63ff; text-decoration: none; font-family: 'Inter', sans-serif;
+            font-size: 14px; font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link">← Back to Dashboard</a>
+    <div id="swagger-ui"></div>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script>
+        SwaggerUIBundle({
+            url: '/api/v1/openapi.json',
+            dom_id: '#swagger-ui',
+            deepLinking: true,
+            layout: 'StandaloneLayout',
+            defaultModelsExpandDepth: 1,
+            docExpansion: 'list',
+            filter: true,
+        });
+    </script>
+</body>
+</html>

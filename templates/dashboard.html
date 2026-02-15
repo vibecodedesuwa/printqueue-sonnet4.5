@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — PrintQ{% endblock %}
+
+{% block content %}
+<div class="nav-tabs">
+    <a class="nav-tab active" href="{{ url_for('web.dashboard') }}">📋 My Jobs</a>
+    {% if is_admin %}
+    <a class="nav-tab" href="{{ url_for('web.admin') }}">🔧 Admin</a>
+    {% endif %}
+    <a class="nav-tab" href="{{ url_for('upload.upload_page') }}">📤 Upload</a>
+</div>
+
+<!-- Printer Status -->
+<div class="status-bar" id="printerStatus">
+    <div class="status-indicator">
+        <span class="status-dot online" id="statusDot"></span>
+        <span id="statusText">Checking printer...</span>
+    </div>
+    <span style="color: var(--text-muted); font-size: 13px;">Auto-refreshes every 10s</span>
+</div>
+
+<!-- Unclaimed Jobs Section -->
+{% if unclaimed_jobs %}
+<div style="margin-bottom: 24px;">
+    <div class="section-header">
+        <h2>🔔 Unclaimed Jobs <span class="count-badge" style="background: var(--accent-warning);">{{ unclaimed_jobs|length }}</span></h2>
+        <span style="color: var(--text-muted); font-size: 13px;">Tap "Claim" if it's yours</span>
+    </div>
+
+    <!-- Desktop table -->
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Document</th>
+                    <th>From</th>
+                    <th>Status</th>
+                    <th>Time</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for job in unclaimed_jobs %}
+                <tr style="border-left: 3px solid var(--accent-warning);">
+                    <td><strong>#{{ job.id }}</strong></td>
+                    <td>{{ job.name }}</td>
+                    <td>{{ job.user }}</td>
+                    <td><span class="badge badge-unclaimed">Unclaimed</span></td>
+                    <td>{{ job.time }}</td>
+                    <td>
+                        <button onclick="claimJob({{ job.id }})" class="btn btn-warning btn-small">🙋 Claim</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Mobile cards -->
+    <div class="job-cards">
+        {% for job in unclaimed_jobs %}
+        <div class="job-card unclaimed" data-job-id="{{ job.id }}">
+            <div class="job-card-header">
+                <span class="job-card-title">#{{ job.id }} — {{ job.name }}</span>
+                <span class="badge badge-unclaimed">Unclaimed</span>
+            </div>
+            <div class="job-card-meta">
+                <span>📱 From: {{ job.user }}</span>
+                <span>🕐 {{ job.time }}</span>
+            </div>
+            <div class="job-card-actions">
+                <button onclick="claimJob({{ job.id }})" class="btn btn-warning btn-small">🙋 Claim</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- My Jobs Section -->
+<div class="section-header">
+    <h2>📄 My Jobs <span class="count-badge">{{ jobs|length }}</span></h2>
+</div>
+
+{% if jobs %}
+
+<!-- Desktop table -->
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Document</th>
+                <th>Status</th>
+                <th>Pages</th>
+                <th>Size</th>
+                <th>Time</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job in jobs %}
+            <tr data-job-id="{{ job.id }}">
+                <td><strong>#{{ job.id }}</strong></td>
+                <td>{{ job.name }}</td>
+                <td><span class="badge badge-{{ job.state_text.lower() }}">{{ job.state_text }}</span></td>
+                <td>{{ job.pages if job.pages > 0 else 'N/A' }}</td>
+                <td>{{ (job.size / 1024)|round(2) }} MB</td>
+                <td>{{ job.time }}</td>
+                <td>
+                    <div class="action-buttons">
+                        {% if job.state in [3, 4] %}
+                        <button onclick="releaseJob({{ job.id }})" class="btn btn-success btn-small">✓ Release</button>
+                        {% endif %}
+                        {% if job.state not in [7, 8, 9] %}
+                        <button onclick="cancelJob({{ job.id }})" class="btn btn-danger btn-small">✗ Cancel</button>
+                        {% endif %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Mobile cards -->
+<div class="job-cards">
+    {% for job in jobs %}
+    <div class="job-card" data-job-id="{{ job.id }}">
+        <div class="job-card-header">
+            <span class="job-card-title">#{{ job.id }} — {{ job.name }}</span>
+            <span class="badge badge-{{ job.state_text.lower() }}">{{ job.state_text }}</span>
+        </div>
+        <div class="job-card-meta">
+            <span>📄 {{ job.pages if job.pages > 0 else 'N/A' }} pages</span>
+            <span>💾 {{ (job.size / 1024)|round(2) }} MB</span>
+            <span>🕐 {{ job.time }}</span>
+        </div>
+        <div class="job-card-actions">
+            {% if job.state in [3, 4] %}
+            <button onclick="releaseJob({{ job.id }})" class="btn btn-success btn-small">✓ Release</button>
+            {% endif %}
+            {% if job.state not in [7, 8, 9] %}
+            <button onclick="cancelJob({{ job.id }})" class="btn btn-danger btn-small">✗ Cancel</button>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-icon">🖨️</div>
+    <h3>No print jobs</h3>
+    <p>Upload a file or print from your device to get started!</p>
+    <a href="{{ url_for('upload.upload_page') }}" class="btn btn-primary" style="margin-top: 16px;">📤 Upload & Print</a>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Fetch printer status
+    fetch('{{ url_for("web.api_printer_status") }}')
+        .then(r => r.json())
+        .then(data => {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            if (data.error) {
+                dot.className = 'status-dot offline';
+                text.textContent = '⚠️ ' + data.error;
+            } else {
+                dot.className = data.state === 3 ? 'status-dot online' : 'status-dot offline';
+                text.textContent = data.name + ' — ' + data.state_text;
+            }
+        })
+        .catch(() => {
+            document.getElementById('statusDot').className = 'status-dot offline';
+            document.getElementById('statusText').textContent = '⚠️ Unable to reach printer';
+        });
+
+    function releaseJob(jobId) {
+        if (!confirm('Release this job for printing?')) return;
+        fetch(`/api/job/${jobId}/release`, { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) location.reload();
+                else alert('Error: ' + (data.error || data.message));
+            })
+            .catch(err => alert('Error: ' + err));
+    }
+
+    function cancelJob(jobId) {
+        if (!confirm('Cancel this print job?')) return;
+        fetch(`/api/job/${jobId}/cancel`, { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) location.reload();
+                else alert('Error: ' + (data.error || data.message));
+            })
+            .catch(err => alert('Error: ' + err));
+    }
+
+    function claimJob(jobId) {
+        fetch(`/api/job/${jobId}/claim`, { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.message || 'Could not claim this job');
+                }
+            })
+            .catch(err => alert('Error: ' + err));
+    }
+</script>
+{% endblock %}

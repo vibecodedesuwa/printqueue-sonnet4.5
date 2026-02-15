@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kiosk Login — PrintQ</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0a14;
+            color: #e8e8f0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            -webkit-font-smoothing: antialiased;
+        }
+        .login-box {
+            background: #16213e;
+            border: 1px solid rgba(108, 99, 255, 0.2);
+            border-radius: 20px;
+            padding: 40px;
+            width: 340px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+        h1 {
+            font-size: 28px; font-weight: 800; margin-bottom: 8px;
+            background: linear-gradient(135deg, #6c63ff, #e94560);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        p { color: #a0a0b8; font-size: 14px; margin-bottom: 24px; }
+        .pin-display {
+            display: flex; justify-content: center; gap: 8px; margin-bottom: 24px;
+        }
+        .pin-dot {
+            width: 16px; height: 16px; border-radius: 50%;
+            border: 2px solid rgba(108, 99, 255, 0.3);
+            transition: all 0.2s;
+        }
+        .pin-dot.filled { background: #6c63ff; border-color: #6c63ff; box-shadow: 0 0 10px rgba(108, 99, 255, 0.4); }
+        .pin-dot.error { background: #ff4757; border-color: #ff4757; }
+        .numpad {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+        }
+        .numpad button {
+            padding: 18px; border: 1px solid rgba(108, 99, 255, 0.15);
+            border-radius: 12px; background: rgba(255,255,255,0.04);
+            color: #e8e8f0; font-family: inherit; font-size: 22px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s; min-height: 60px;
+        }
+        .numpad button:active { background: rgba(108, 99, 255, 0.2); transform: scale(0.95); }
+        .numpad button.clear { font-size: 14px; color: #a0a0b8; }
+        .error-msg {
+            color: #ff4757; font-size: 13px; margin-top: 16px;
+            animation: shake 0.5s ease;
+        }
+        @keyframes shake {
+            0%,100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h1>🖨️ Kiosk</h1>
+        <p>Enter PIN to access</p>
+        <div class="pin-display">
+            <div class="pin-dot" id="d0"></div>
+            <div class="pin-dot" id="d1"></div>
+            <div class="pin-dot" id="d2"></div>
+            <div class="pin-dot" id="d3"></div>
+        </div>
+        <div class="numpad">
+            <button onclick="addDigit('1')">1</button>
+            <button onclick="addDigit('2')">2</button>
+            <button onclick="addDigit('3')">3</button>
+            <button onclick="addDigit('4')">4</button>
+            <button onclick="addDigit('5')">5</button>
+            <button onclick="addDigit('6')">6</button>
+            <button onclick="addDigit('7')">7</button>
+            <button onclick="addDigit('8')">8</button>
+            <button onclick="addDigit('9')">9</button>
+            <button class="clear" onclick="clearPin()">Clear</button>
+            <button onclick="addDigit('0')">0</button>
+            <button class="clear" onclick="backspace()">⌫</button>
+        </div>
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="error-msg">{{ messages[0] }}</div>
+        {% endif %}
+        {% endwith %}
+
+        <form id="pinForm" method="POST" action="{{ url_for('web.kiosk_auth') }}" style="display:none;">
+            <input type="hidden" name="pin" id="pinInput">
+        </form>
+    </div>
+
+    <script>
+        let pin = '';
+        function addDigit(d) {
+            if (pin.length >= 4) return;
+            pin += d;
+            updateDots();
+            if (pin.length === 4) {
+                document.getElementById('pinInput').value = pin;
+                document.getElementById('pinForm').submit();
+            }
+            if (navigator.vibrate) navigator.vibrate(30);
+        }
+        function clearPin() { pin = ''; updateDots(); }
+        function backspace() { pin = pin.slice(0, -1); updateDots(); }
+        function updateDots() {
+            for (let i = 0; i < 4; i++) {
+                const dot = document.getElementById('d' + i);
+                dot.className = i < pin.length ? 'pin-dot filled' : 'pin-dot';
+            }
+        }
+    </script>
+</body>
+</html>

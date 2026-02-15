@@ -1,0 +1,274 @@
+openapi: "3.0.3"
+info:
+  title: PrintQ API
+  description: |
+    REST API for the Print Queue Manager.
+    Authenticate with API keys via the `Authorization: Bearer <key>` header.
+  version: "1.0.0"
+  contact:
+    name: Print Queue Admin
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API Key
+
+  schemas:
+    Job:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        user: { type: string }
+        printer: { type: string }
+        state: { type: integer }
+        state_text: { type: string }
+        pages: { type: integer }
+        size: { type: integer }
+        time: { type: string }
+        submitted_via: { type: string, enum: [ipp, web, email, api] }
+        claimed_by: { type: string, nullable: true }
+
+    Printer:
+      type: object
+      properties:
+        name: { type: string }
+        state: { type: integer }
+        state_text: { type: string }
+        accepting: { type: boolean }
+        shared: { type: boolean }
+
+    ApiKey:
+      type: object
+      properties:
+        id: { type: integer }
+        key_prefix: { type: string }
+        name: { type: string }
+        owner: { type: string }
+        permissions: { type: array, items: { type: string } }
+        created_at: { type: string }
+        last_used: { type: string, nullable: true }
+        request_count: { type: integer }
+
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      tags: [System]
+      responses:
+        "200":
+          description: Service is healthy
+
+  /jobs:
+    get:
+      summary: List print jobs
+      tags: [Jobs]
+      parameters:
+        - name: user
+          in: query
+          schema: { type: string }
+          description: Filter by username
+        - name: state
+          in: query
+          schema: { type: string }
+          description: Filter by state (pending, held, processing, etc.)
+        - name: unclaimed
+          in: query
+          schema: { type: boolean }
+          description: Show only unclaimed jobs
+      responses:
+        "200":
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobs:
+                    { type: array, items: { $ref: "#/components/schemas/Job" } }
+                  total: { type: integer }
+
+  /jobs/unclaimed:
+    get:
+      summary: List unclaimed jobs
+      tags: [Jobs]
+      description: Jobs from AirPrint/Mopria that haven't been claimed by a user
+      responses:
+        "200":
+          description: Unclaimed jobs
+
+  /jobs/{id}:
+    get:
+      summary: Get job details
+      tags: [Jobs]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Job details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "404":
+          description: Job not found
+
+  /jobs/{id}/release:
+    post:
+      summary: Release a held job
+      tags: [Jobs]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Job released
+
+  /jobs/{id}/cancel:
+    post:
+      summary: Cancel a job
+      tags: [Jobs]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Job canceled
+
+  /jobs/{id}/claim:
+    post:
+      summary: Claim an unclaimed job
+      tags: [Jobs]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username: { type: string }
+              required: [username]
+      responses:
+        "200":
+          description: Job claimed
+        "409":
+          description: Job already claimed
+
+  /print:
+    post:
+      summary: Submit a print job
+      tags: [Jobs]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+                copies: { type: string, default: "1" }
+                duplex: { type: string, enum: ["true", "false"] }
+                color: { type: string, enum: ["true", "false"] }
+                page_range: { type: string }
+                printer: { type: string }
+              required: [file]
+      responses:
+        "201":
+          description: Job submitted
+        "400":
+          description: Invalid request
+
+  /printer/status:
+    get:
+      summary: Get default printer status
+      tags: [Printers]
+      responses:
+        "200":
+          description: Printer status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Printer" }
+
+  /printers:
+    get:
+      summary: List all printers
+      tags: [Printers]
+      responses:
+        "200":
+          description: Printer list
+
+  /keys:
+    get:
+      summary: List API keys
+      tags: [Admin]
+      responses:
+        "200":
+          description: API keys
+    post:
+      summary: Create API key
+      tags: [Admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                owner: { type: string }
+                permissions:
+                  {
+                    type: array,
+                    items: { type: string, enum: [read, write, admin] },
+                  }
+              required: [name]
+      responses:
+        "201":
+          description: Key created (raw key returned once)
+
+  /keys/{id}:
+    delete:
+      summary: Revoke an API key
+      tags: [Admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Key revoked
+
+  /users:
+    get:
+      summary: List known users
+      tags: [Admin]
+      responses:
+        "200":
+          description: Users from device and email mappings

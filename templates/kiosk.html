@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <title>Kiosk — PrintQ</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0a14;
+            color: #e8e8f0;
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Header */
+        .kiosk-header {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(108, 99, 255, 0.2);
+        }
+        .kiosk-header h1 {
+            font-size: 22px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #6c63ff, #e94560);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .printer-badge {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 16px; border-radius: 20px;
+            font-size: 14px; font-weight: 600;
+        }
+        .printer-badge.online { background: rgba(0, 217, 166, 0.15); color: #00d9a6; }
+        .printer-badge.offline { background: rgba(255, 71, 87, 0.15); color: #ff4757; }
+        .pulse-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        .pulse-dot.online { background: #00d9a6; box-shadow: 0 0 8px rgba(0,217,166,0.6); }
+        .pulse-dot.offline { background: #ff4757; box-shadow: 0 0 8px rgba(255,71,87,0.6); }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+        /* Jobs Grid */
+        .jobs-container {
+            padding: 16px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 16px;
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
+        }
+
+        .job-card {
+            background: #16213e;
+            border: 1px solid rgba(108, 99, 255, 0.15);
+            border-radius: 16px;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+        .job-card:hover {
+            border-color: rgba(108, 99, 255, 0.4);
+            box-shadow: 0 0 20px rgba(108, 99, 255, 0.1);
+        }
+        .job-card.unclaimed {
+            border-color: rgba(255, 192, 72, 0.5);
+            border-width: 2px;
+        }
+
+        .job-title {
+            font-size: 18px; font-weight: 700; margin-bottom: 6px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .job-meta {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 4px; margin-bottom: 16px;
+            font-size: 14px; color: #a0a0b8;
+        }
+        .job-status {
+            display: inline-flex; padding: 4px 12px; border-radius: 20px;
+            font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+            margin-bottom: 12px;
+        }
+        .status-held { background: rgba(108, 99, 255, 0.2); color: #6c63ff; }
+        .status-pending { background: rgba(255, 192, 72, 0.2); color: #ffc048; }
+        .status-unclaimed { background: rgba(255, 192, 72, 0.3); color: #ffc048; animation: blink 1.5s infinite; }
+        @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+
+        /* Big Buttons */
+        .kiosk-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .kiosk-btn {
+            padding: 18px;
+            border: none;
+            border-radius: 14px;
+            font-family: inherit;
+            font-size: 18px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .kiosk-btn:active { transform: scale(0.96); }
+        .kiosk-btn-approve {
+            background: linear-gradient(135deg, #00d9a6, #00c49a);
+            color: #0a2620;
+            box-shadow: 0 6px 20px rgba(0, 217, 166, 0.3);
+        }
+        .kiosk-btn-deny {
+            background: linear-gradient(135deg, #ff4757, #e84040);
+            color: white;
+            box-shadow: 0 6px 20px rgba(255, 71, 87, 0.3);
+        }
+
+        /* Empty */
+        .empty-state {
+            text-align: center; padding: 80px 20px; color: #6b6b80;
+            grid-column: 1 / -1;
+        }
+        .empty-state .icon { font-size: 64px; margin-bottom: 16px; }
+        .empty-state h2 { color: #a0a0b8; margin-bottom: 8px; }
+
+        /* Clock */
+        .clock { font-size: 14px; color: #6b6b80; font-weight: 600; font-variant-numeric: tabular-nums; }
+    </style>
+</head>
+<body>
+    <div class="kiosk-header">
+        <h1>🖨️ PrintQ Kiosk</h1>
+        <div style="display: flex; align-items: center; gap: 16px;">
+            <span class="clock" id="clock"></span>
+            <div class="printer-badge {{ 'online' if printer.state == 3 else 'offline' }}" id="printerBadge">
+                <span class="pulse-dot {{ 'online' if printer.state == 3 else 'offline' }}"></span>
+                {{ printer.state_text|default('Unknown') }}
+            </div>
+        </div>
+    </div>
+
+    <div class="jobs-container" id="jobsContainer">
+        {% if jobs %}
+            {% for job in jobs %}
+            <div class="job-card {% if job.state in [3, 4] %}{% endif %}" data-job-id="{{ job.id }}">
+                <span class="job-status {% if job.state == 4 %}status-held{% elif job.state == 3 %}status-pending{% endif %}">
+                    {{ job.state_text }}
+                </span>
+                <div class="job-title">📄 {{ job.name }}</div>
+                <div class="job-meta">
+                    <span>👤 {{ job.user }}</span>
+                    <span>📄 {{ job.pages if job.pages > 0 else '?' }} pages</span>
+                    <span>💾 {{ (job.size / 1024)|round(1) }} MB</span>
+                    <span>🕐 {{ job.time }}</span>
+                </div>
+                {% if job.state in [3, 4] %}
+                <div class="kiosk-actions">
+                    <button class="kiosk-btn kiosk-btn-approve" onclick="approveJob({{ job.id }})">✓ Approve</button>
+                    <button class="kiosk-btn kiosk-btn-deny" onclick="denyJob({{ job.id }})">✗ Deny</button>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <div class="icon">✨</div>
+                <h2>All clear!</h2>
+                <p>No pending print jobs. Waiting for new jobs...</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <script>
+        // Clock
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent = now.toLocaleTimeString();
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Auto-refresh via fetch
+        setInterval(async () => {
+            try {
+                const res = await fetch('/kiosk/api/jobs');
+                const data = await res.json();
+                // Simple reload for now
+                if (data.jobs) location.reload();
+            } catch (e) {}
+        }, 5000);
+
+        // Job actions
+        async function approveJob(id) {
+            const btn = event.target;
+            btn.textContent = '⏳';
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/kiosk/api/job/${id}/release`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    btn.textContent = '✓ Done!';
+                    // Haptic feedback
+                    if (navigator.vibrate) navigator.vibrate(100);
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    btn.textContent = '❌ Error';
+                    setTimeout(() => { btn.textContent = '✓ Approve'; btn.disabled = false; }, 2000);
+                }
+            } catch (e) {
+                btn.textContent = '❌ Error';
+                setTimeout(() => { btn.textContent = '✓ Approve'; btn.disabled = false; }, 2000);
+            }
+        }
+
+        async function denyJob(id) {
+            const btn = event.target;
+            btn.textContent = '⏳';
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/kiosk/api/job/${id}/cancel`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    btn.textContent = '✓ Denied';
+                    if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+                    setTimeout(() => location.reload(), 1000);
+                } else {
+                    btn.textContent = '❌ Error';
+                    setTimeout(() => { btn.textContent = '✗ Deny'; btn.disabled = false; }, 2000);
+                }
+            } catch (e) {
+                btn.textContent = '❌ Error';
+                setTimeout(() => { btn.textContent = '✗ Deny'; btn.disabled = false; }, 2000);
+            }
+        }
+
+        // Audio notification for new jobs
+        let lastJobCount = {{ jobs|length }};
+        setInterval(async () => {
+            try {
+                const res = await fetch('/kiosk/api/jobs');
+                const data = await res.json();
+                if (data.jobs && data.jobs.length > lastJobCount) {
+                    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+                    lastJobCount = data.jobs.length;
+                }
+            } catch (e) {}
+        }, 3000);
+    </script>
+</body>
+</html>

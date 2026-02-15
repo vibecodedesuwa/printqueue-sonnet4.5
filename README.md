@@ -1,257 +1,201 @@
-# Print Queue Manager with Authentik SSO
+# 🖨️ PrintQ — Print Queue Manager
 
-"Enterprise-grade" (Self-Claimed by Claude) print queue management system for home/small office use with consumer printers.
+A modern, feature-rich print queue management system built with Flask. Supports Kiosk Mode, Web Upload, Email Print, REST API, AirPrint/Mopria, and a "Claim Your Job" system for mobile devices.
 
-## Features
+## ✨ Features
 
-- 🔐 **Authentik SSO Integration** - Secure authentication with your existing Authentik instance
-- 👥 **Multi-user Support** - 10+ users with individual job tracking
-- 🖨️ **Consumer Printer Support** - Works with HP Smart Tank 515 and similar models
-- ⏸️ **Hold & Release** - All jobs held until manually approved
-- 👨‍💼 **Admin Dashboard** - Manage all users' print jobs
-- 📊 **Real-time Updates** - See job status in real-time
-- 🔄 **Active Directory Integration** - Via Authentik
+| Feature               | Description                                                                      |
+| --------------------- | -------------------------------------------------------------------------------- |
+| **Kiosk Mode**        | Touch-optimized fullscreen UI for approving/denying jobs on a phone/tablet       |
+| **Web Upload**        | Drag-and-drop file upload with print options (copies, duplex, color, page range) |
+| **Email Print**       | Send attachments via email to print — auto-submitted to queue                    |
+| **REST API v1**       | 20+ endpoints with API key authentication, rate limiting, Swagger docs           |
+| **AirPrint / Mopria** | Native iOS/Android/macOS/Windows printing via CUPS + Avahi mDNS                  |
+| **Claim Your Job**    | Unclaimed job pool for AirPrint/Mopria users — claim via web dashboard           |
+| **PWA**               | Add to home screen, offline caching, responsive mobile-first design              |
+| **Authentik SSO**     | OpenID Connect authentication via Authentik                                      |
+| **Hold & Release**    | All jobs are held until approved via dashboard, kiosk, or API                    |
+| **Admin Panel**       | Manage all jobs, API keys, device mappings, email mappings                       |
 
-## Supported Printers
-
-While designed for HP Smart Tank 515, this system works with most consumer printers:
-- HP Ink Tank / Smart Tank series
-- Canon PIXMA series
-- Epson EcoTank series
-- Any printer with CUPS drivers
-
-## Architecture
+## 🏗️ Architecture
 
 ```
-┌─────────────┐      ┌──────────────┐      ┌─────────────┐
-│   Client    │─────▶│  Authentik   │─────▶│    Print    │
-│   Device    │      │     SSO      │      │    Queue    │
-└─────────────┘      └──────────────┘      │   Manager   │
-                                            └──────┬──────┘
-                                                   │
-                                            ┌──────▼──────┐
-                                            │    CUPS     │
-                                            │   Server    │
-                                            └──────┬──────┘
-                                                   │
-                                            ┌──────▼──────┐
-                                            │  HP Smart   │
-                                            │  Tank 515   │
-                                            └─────────────┘
+printqueue-sonnet4.5/
+├── app.py                     # Entry point (app factory)
+├── printqueue/                # Flask application package
+│   ├── __init__.py            # App factory
+│   ├── config.py              # Environment config
+│   ├── models.py              # SQLite models (API keys, jobs, mappings)
+│   ├── auth.py                # Auth decorators (session, API key, kiosk)
+│   ├── cups_utils.py          # CUPS integration helpers
+│   ├── routes/
+│   │   ├── web.py             # Dashboard, admin, kiosk, login routes
+│   │   ├── api_v1.py          # REST API v1 endpoints
+│   │   └── upload.py          # File upload routes
+│   ├── services/
+│   │   ├── file_converter.py  # DOCX→PDF conversion (LibreOffice)
+│   │   └── mail_printer.py    # IMAP email polling service
+│   └── swagger/
+│       └── api_v1.yml         # OpenAPI 3.0 specification
+├── templates/                 # Jinja2 templates
+│   ├── base.html              # Base layout (dark theme, responsive)
+│   ├── dashboard.html         # User dashboard (with claim system)
+│   ├── admin.html             # Admin panel (jobs, keys, mappings)
+│   ├── kiosk.html             # Kiosk approval screen
+│   ├── kiosk_login.html       # Kiosk PIN entry
+│   ├── upload.html            # Drag-and-drop upload
+│   └── api_docs.html          # Swagger UI
+├── static/
+│   ├── manifest.json          # PWA manifest
+│   ├── sw.js                  # Service worker
+│   └── icons/                 # PWA icons
+├── config/
+│   └── avahi/                 # AirPrint mDNS service files
+├── scripts/
+│   └── setup-airprint.sh      # AirPrint/Avahi setup automation
+├── data/                      # SQLite DB + uploaded files
+├── docker-compose.yml
+├── Dockerfile
+├── requirements.txt
+├── .env.example
+├── CLIENT_PRINT_GUIDE.md      # Multi-platform setup guide
+└── README.md
 ```
 
-## Quick Start
+## 🚀 Quick Start
 
-### Prerequisites
-
-- Proxmox LXC container (Ubuntu 22.04 or Debian 12)
-- Authentik instance
-- HP Smart Tank 515 or compatible printer
-- Active Directory (optional)
-
-### Installation
-
-See [LXC_SETUP_GUIDE.md](LXC_SETUP_GUIDE.md) for complete step-by-step instructions.
-
-**Quick install:**
+### 1. Clone and configure
 
 ```bash
-# 1. Create LXC container in Proxmox
-# 2. Install dependencies
-apt update && apt install -y cups python3 python3-pip hplip
-
-# 3. Clone/copy this repository
-cd /opt
-git clone <your-repo> print-queue-manager
-cd print-queue-manager
-
-# 4. Install Python dependencies
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# 5. Configure environment
+git clone <repo-url>
+cd printqueue-sonnet4.5
 cp .env.example .env
-nano .env  # Add your Authentik credentials
-
-# 6. Configure printer
-hp-setup -i  # Follow prompts
-lpadmin -p HP_Smart_Tank_515 -o job-hold-until=indefinite
-
-# 7. Start the service
-cp print-queue-manager.service /etc/systemd/system/
-systemctl enable --now print-queue-manager
+# Edit .env with your settings
 ```
 
-## Configuration
-
-### Environment Variables
+### 2. Run with Docker Compose
 
 ```bash
-# Required
-SECRET_KEY=<random-secret-key>
-AUTHENTIK_CLIENT_ID=<from-authentik>
-AUTHENTIK_CLIENT_SECRET=<from-authentik>
-AUTHENTIK_METADATA_URL=https://authentik.example.com/application/o/print-queue/.well-known/openid-configuration
-
-# Optional
-PRINTER_NAME=HP_Smart_Tank_515
-ADMIN_GROUPS=admins,print-admins
-ADMIN_USERS=admin
+docker-compose up -d --build
 ```
 
-### Authentik Setup
+### 3. Access
 
-1. Create OAuth2/OpenID Provider in Authentik
-2. Set redirect URI: `http://<your-server>:5000/authorize`
-3. Create application and link provider
-4. Copy Client ID and Secret to `.env`
+| URL                              | Purpose                     |
+| -------------------------------- | --------------------------- |
+| `http://localhost:5000`          | Web Dashboard (SSO login)   |
+| `http://localhost:5000/kiosk`    | Kiosk Mode (PIN: `1234`)    |
+| `http://localhost:5000/upload`   | Upload & Print              |
+| `http://localhost:5000/api/docs` | API Documentation (Swagger) |
+| `http://localhost:631`           | CUPS Admin                  |
 
-## Usage
-
-### For Users
-
-1. Print from any device to the shared printer
-2. Visit `http://<server>:5000`
-3. Login with Authentik credentials
-4. See your jobs in "Held" status
-5. Click "Release" to start printing
-
-### For Admins
-
-1. Login with admin account
-2. Click "All Jobs (Admin)" tab
-3. Manage all users' print jobs
-4. Release or cancel any job
-
-## File Structure
-
-```
-print-queue-manager/
-├── app.py                      # Main Flask application
-├── requirements.txt            # Python dependencies
-├── .env.example               # Environment template
-├── templates/
-│   ├── base.html              # Base template
-│   ├── dashboard.html         # User dashboard
-│   └── admin.html             # Admin dashboard
-├── print-queue-manager.service # Systemd service
-├── Dockerfile                 # Docker image (optional)
-├── docker-compose.yml         # Docker Compose (optional)
-├── LXC_SETUP_GUIDE.md        # Detailed setup guide
-└── README.md                  # This file
-```
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Home (redirects to dashboard or login) |
-| `/login` | GET | Initiate Authentik OAuth |
-| `/authorize` | GET | OAuth callback |
-| `/dashboard` | GET | User dashboard |
-| `/admin` | GET | Admin dashboard |
-| `/api/jobs` | GET | Get jobs (JSON) |
-| `/api/job/<id>/release` | POST | Release a job |
-| `/api/job/<id>/cancel` | POST | Cancel a job |
-| `/api/printer/status` | GET | Get printer status |
-| `/health` | GET | Health check |
-
-## Security Features
-
-- ✅ Authentik SSO (OAuth2/OIDC)
-- ✅ Session-based authentication
-- ✅ Role-based access control (RBAC)
-- ✅ Users can only manage their own jobs
-- ✅ Admins can manage all jobs
-- ✅ CSRF protection
-- ✅ Secure cookie handling
-
-## Troubleshooting
-
-### Jobs not appearing
+### 4. Enable AirPrint (optional)
 
 ```bash
-# Check CUPS is running
-systemctl status cups
-
-# Check printer is set to hold jobs
-lpstat -p HP_Smart_Tank_515 -l
-
-# Check CUPS logs
-tail -f /var/log/cups/error_log
+docker exec -it cups-server bash /scripts/setup-airprint.sh
 ```
 
-### Authentik login fails
+## 📱 Client Setup
+
+See **[CLIENT_PRINT_GUIDE.md](CLIENT_PRINT_GUIDE.md)** for step-by-step instructions to connect:
+
+- 📱 iPhone / iPad (AirPrint — zero config)
+- 🤖 Android (Mopria / Default Print Service)
+- 💻 macOS (AirPrint)
+- 🪟 Windows 10/11 (IPP)
+- 🐧 Linux (CUPS client)
+- 🌐 Web Upload (any browser)
+- 📧 Email Print
+
+## 🔑 REST API
+
+All endpoints require an API key via `Authorization: Bearer <key>` header.
+
+### Quick Examples
 
 ```bash
-# Verify metadata URL
-curl $AUTHENTIK_METADATA_URL
+# List jobs
+curl -H "Authorization: Bearer pq_your_key" http://localhost:5000/api/v1/jobs
 
-# Check application logs
-journalctl -u print-queue-manager -f
+# Submit a print job
+curl -X POST -H "Authorization: Bearer pq_your_key" \
+  -F "file=@document.pdf" -F "copies=2" \
+  http://localhost:5000/api/v1/print
 
-# Verify redirect URI in Authentik matches your URL
+# Release a job
+curl -X POST -H "Authorization: Bearer pq_your_key" \
+  http://localhost:5000/api/v1/jobs/42/release
+
+# Claim an unclaimed job
+curl -X POST -H "Authorization: Bearer pq_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "john"}' \
+  http://localhost:5000/api/v1/jobs/42/claim
 ```
 
-### Printer not found
+### Endpoints Overview
 
-```bash
-# List available printers
-lpstat -p -d
+| Endpoint                    | Method   | Auth  | Description           |
+| --------------------------- | -------- | ----- | --------------------- |
+| `/api/v1/health`            | GET      | —     | Health check          |
+| `/api/v1/jobs`              | GET      | read  | List jobs             |
+| `/api/v1/jobs/unclaimed`    | GET      | read  | Unclaimed jobs        |
+| `/api/v1/jobs/<id>`         | GET      | read  | Job details           |
+| `/api/v1/jobs/<id>/release` | POST     | write | Release job           |
+| `/api/v1/jobs/<id>/cancel`  | POST     | write | Cancel job            |
+| `/api/v1/jobs/<id>/claim`   | POST     | write | Claim job             |
+| `/api/v1/print`             | POST     | write | Upload & print        |
+| `/api/v1/printer/status`    | GET      | read  | Printer status        |
+| `/api/v1/printers`          | GET      | read  | List printers         |
+| `/api/v1/keys`              | GET/POST | admin | API key management    |
+| `/api/v1/keys/<id>`         | DELETE   | admin | Revoke key            |
+| `/api/v1/users`             | GET      | admin | List known users      |
+| `/api/v1/devices`           | POST     | admin | Add device mapping    |
+| `/api/v1/devices/<id>`      | DELETE   | admin | Delete device mapping |
+| `/api/v1/emails`            | POST     | admin | Add email mapping     |
+| `/api/v1/emails/<email>`    | DELETE   | admin | Delete email mapping  |
 
-# Check printer drivers
-lpinfo -m | grep -i hp
+Full interactive docs: **`/api/docs`** (Swagger UI)
 
-# Reinstall printer
-lpadmin -p HP_Smart_Tank_515 -v usb://HP/Smart%20Tank%20515 -E
-```
+## 🔐 Authentication
 
-## Performance
+| Context       | Method                                  |
+| ------------- | --------------------------------------- |
+| Web Dashboard | Authentik SSO (OpenID Connect)          |
+| Kiosk Mode    | 4-digit PIN (`KIOSK_PIN` env var)       |
+| REST API      | API key (`Authorization: Bearer <key>`) |
+| Email Print   | Sender email mapped to username         |
 
-- Handles 10+ concurrent users
-- Supports 100+ jobs in queue
-- Auto-refresh every 10 seconds
-- Minimal resource usage (<512MB RAM)
+## 🙋 Claim Your Job System
 
-## Limitations
+When printing via AirPrint/Mopria, the system may not identify you. The claim flow:
 
-- Requires printer connected to server (USB or network)
-- Consumer printers may lack enterprise features
-- No job scheduling or quotas (can be added)
-- No color/duplex enforcement (printer-dependent)
+1. 📱 You print from your phone → CUPS receives the job with a generic username (e.g., "iPhone")
+2. 🔍 PrintQ checks the **device mapping** table — if your device is mapped, the job is auto-assigned
+3. ❓ If unmapped, the job enters the **unclaimed pool**
+4. 🙋 You log into the dashboard and click **"Claim"** on your job
+5. ✅ The job is now yours to approve
 
-## Future Enhancements
+**Admin tip:** Add recurring devices in **Admin → Device Mapping** so future jobs auto-assign.
 
-- [ ] Job scheduling
-- [ ] Print quotas per user
-- [ ] Email notifications
-- [ ] Mobile app
-- [ ] Print cost tracking
-- [ ] Multiple printer support
-- [ ] Advanced reporting
+## ⚙️ Environment Variables
 
-## License
+| Variable                  | Default               | Description                             |
+| ------------------------- | --------------------- | --------------------------------------- |
+| `SECRET_KEY`              |                       | Flask secret key                        |
+| `AUTHENTIK_CLIENT_ID`     |                       | OAuth client ID                         |
+| `AUTHENTIK_CLIENT_SECRET` |                       | OAuth client secret                     |
+| `AUTHENTIK_METADATA_URL`  |                       | OIDC metadata URL                       |
+| `PRINTER_NAME`            | `HP_Smart_Tank_515`   | Default CUPS printer                    |
+| `ADMIN_GROUPS`            | `admins,print-admins` | Admin group names                       |
+| `ADMIN_USERS`             | `admin`               | Admin usernames                         |
+| `KIOSK_PIN`               | `1234`                | Kiosk access PIN                        |
+| `MAIL_ENABLED`            | `false`               | Enable email printing                   |
+| `MAIL_IMAP_HOST`          |                       | IMAP server host                        |
+| `MAIL_IMAP_USER`          |                       | IMAP username                           |
+| `MAIL_IMAP_PASS`          |                       | IMAP password                           |
+| `UNCLAIMED_JOB_TIMEOUT`   | `24`                  | Hours before unclaimed jobs auto-cancel |
 
-MIT License - Feel free to use and modify
+## 📄 License
 
-## Support
-
-For issues or questions:
-1. Check LXC_SETUP_GUIDE.md
-2. Review troubleshooting section
-3. Check CUPS and application logs
-
-## Credits
-
-Built with:
-- Flask - Web framework
-- Authlib - OAuth2 integration
-- PyCUPS - CUPS Python bindings
-- Authentik - Identity provider
-- CUPS - Print server
-- HPLIP - HP printer drivers
-
----
-
-**Made with ❤️ for home printing management**
+MIT
