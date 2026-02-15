@@ -31,29 +31,60 @@ def login():
 @web_bp.route('/authorize')
 def authorize():
     try:
+        import requests as http_req
+
+        code = request.args.get('code')
+        if not code:
+            flash('No authorization code received', 'error')
+            return redirect(url_for('web.login'))
+
         authentik = current_app.config['authentik']
 
-        # Fetch token without verifying id_token JWT (avoids JWKS format issues)
-        token = authentik.authorize_access_token(
-            claims_options={'iss': {'essential': False}}
-        )
+        # Load OpenID metadata to get endpoints
+        metadata = authentik.load_server_metadata()
+        token_endpoint = metadata['token_endpoint']
+        userinfo_endpoint = metadata['userinfo_endpoint']
 
-        # Get userinfo — prefer from token, fallback to userinfo endpoint
-        user_info = token.get('userinfo')
-        if not user_info:
-            user_info = authentik.userinfo(token=token)
+        # Exchange code for token (bypass authlib's JWKS verification)
+        from ..config import Config
+        token_resp = http_req.post(token_endpoint, data={
+            'grant_type': 'authorization_code',
+            'code': code,
+            'redirect_uri': url_for('web.authorize', _external=True),
+            'client_id': Config.AUTHENTIK_CLIENT_ID,
+            'client_secret': Config.AUTHENTIK_CLIENT_SECRET,
+        })
 
-        if user_info:
+        if token_resp.status_code != 200:
+            print(f"[AUTH ERROR] Token exchange failed: {token_resp.status_code} {token_resp.text}")
+            flash('Token exchange failed', 'error')
+            return redirect(url_for('web.login'))
+
+        token_data = token_resp.json()
+        access_token = token_data.get('access_token')
+
+        if not access_token:
+            print(f"[AUTH ERROR] No access_token in response: {list(token_data.keys())}")
+            flash('No access token received', 'error')
+            return redirect(url_for('web.login'))
+
+        # Fetch userinfo using access token
+        userinfo_resp = http_req.get(userinfo_endpoint, headers={
+            'Authorization': f'Bearer {access_token}'
+        })
+        user_info = userinfo_resp.json()
+
+        if user_info and user_info.get('preferred_username') or user_info.get('email'):
             session['user'] = {
                 'username': user_info.get('preferred_username') or user_info.get('email'),
                 'email': user_info.get('email'),
-                'name': user_info.get('name'),
+                'name': user_info.get('name', user_info.get('preferred_username', 'User')),
                 'groups': user_info.get('groups', [])
             }
             flash(f"Welcome, {session['user']['name']}!", 'success')
             return redirect(url_for('web.dashboard'))
         else:
-            print(f"[AUTH ERROR] No userinfo in token. Token keys: {list(token.keys())}")
+            print(f"[AUTH ERROR] Userinfo response: {user_info}")
             flash('Failed to get user information', 'error')
             return redirect(url_for('web.login'))
     except Exception as e:
