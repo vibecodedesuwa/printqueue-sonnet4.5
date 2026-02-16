@@ -52,16 +52,49 @@ def get_user_jobs(username=None, db=None):
             # Enrich with full attributes (getJobs may return limited data)
             try:
                 full_attrs = conn.getJobAttributes(job_id)
-                # Debug: dump raw keys from both sources
-                print(f"[CUPS DEBUG] Job #{job_id} getJobs keys: {list(job_info.keys())}")
-                print(f"[CUPS DEBUG] Job #{job_id} getJobAttributes keys: {list(full_attrs.keys())}")
-                print(f"[CUPS DEBUG] Job #{job_id} getJobAttributes user field: {full_attrs.get('job-originating-user-name', 'NOT IN ATTRS')}")
                 job_info.update(full_attrs)
-            except Exception as e:
-                print(f"[CUPS DEBUG] Job #{job_id} getJobAttributes FAILED: {e}")
+            except Exception:
+                pass
 
-            # Debug: print key CUPS attributes for every job
-            print(f"[CUPS DEBUG] Job #{job_id}: user='{job_info.get('job-originating-user-name', 'MISSING')}', name='{job_info.get('job-name', 'MISSING')}', state={job_info.get('job-state', 'MISSING')}")
+            # Fallback: if pycups didn't return key fields, use command-line tools
+            if 'job-originating-user-name' not in job_info or 'job-name' not in job_info:
+                try:
+                    import subprocess
+                    # Try multiple commands to find job info
+                    for cmd in [
+                        ['lpstat', '-o', '-l'],
+                        ['lpstat', '-W', 'all', '-l'],
+                        ['lpq', '-l', '-P', PRINTER_NAME],
+                    ]:
+                        result = subprocess.run(
+                            cmd, capture_output=True, text=True, timeout=5
+                        )
+                        print(f"[LPSTAT DEBUG] cmd={' '.join(cmd)}, output={result.stdout[:300]}")
+                        if result.stdout.strip():
+                            # Parse for this job
+                            for line in result.stdout.split('\n'):
+                                if f'-{job_id} ' in line and not line.startswith(' '):
+                                    parts = line.split()
+                                    print(f"[LPSTAT DEBUG] Matched job #{job_id}: parts={parts}")
+                                    if len(parts) >= 2:
+                                        if 'job-originating-user-name' not in job_info:
+                                            job_info['job-originating-user-name'] = parts[1]
+                                        if 'job-name' not in job_info:
+                                            job_info['job-name'] = f'Job #{job_id}'
+                                # lpq format: "username: Nth  [job N localhost]"
+                                elif f'job {job_id}' in line.lower():
+                                    parts = line.split(':')
+                                    if len(parts) >= 1 and parts[0].strip():
+                                        user = parts[0].strip()
+                                        print(f"[LPSTAT DEBUG] lpq matched job #{job_id}: user={user}")
+                                        if 'job-originating-user-name' not in job_info:
+                                            job_info['job-originating-user-name'] = user
+                                        if 'job-name' not in job_info:
+                                            job_info['job-name'] = f'Job #{job_id}'
+                            if 'job-originating-user-name' in job_info:
+                                break  # Found it, stop trying commands
+                except Exception as e:
+                    print(f"[LPSTAT DEBUG] Fallback failed: {e}")
 
             # Get real username from app database if available
             display_user = job_info.get('job-originating-user-name', 'Unknown')
