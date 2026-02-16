@@ -185,13 +185,15 @@ def admin():
     api_keys = db.list_api_keys()
     known_devices = db.list_known_devices()
     email_mappings = db.list_email_mappings()
+    kiosk_devices = db.list_kiosk_devices()
 
     return render_template('admin.html',
                            user=session['user'],
                            jobs=jobs,
                            api_keys=api_keys,
                            known_devices=known_devices,
-                           email_mappings=email_mappings)
+                           email_mappings=email_mappings,
+                           kiosk_devices=kiosk_devices)
 
 
 # ─── Job Actions (Web) ────────────────────────────────────────────────
@@ -275,23 +277,44 @@ def api_printer_status():
     return jsonify(status)
 
 
-# ─── Kiosk Mode ────────────────────────────────────────────────────────
+# ─── Kiosk Mode (Device Token Auth) ────────────────────────────────
 
 @web_bp.route('/kiosk')
-def kiosk_login():
-    if session.get('kiosk_authenticated'):
-        return redirect(url_for('web.kiosk_dashboard'))
-    return render_template('kiosk_login.html')
+def kiosk_entry():
+    """Kiosk entry — if device is authorized, go to dashboard. Otherwise show unauthorized page."""
+    token = request.cookies.get('kiosk_device_token')
+    if token:
+        db = current_app.config['db']
+        device = db.validate_kiosk_token(token, client_ip=request.remote_addr)
+        if device:
+            return redirect(url_for('web.kiosk_dashboard'))
+    return redirect(url_for('web.kiosk_unauthorized'))
 
 
-@web_bp.route('/kiosk/auth', methods=['POST'])
-def kiosk_auth():
-    pin = request.form.get('pin', '')
-    if pin == current_app.config['KIOSK_PIN']:
-        session['kiosk_authenticated'] = True
-        return redirect(url_for('web.kiosk_dashboard'))
-    flash('Invalid PIN', 'error')
-    return redirect(url_for('web.kiosk_login'))
+@web_bp.route('/kiosk/unauthorized')
+def kiosk_unauthorized():
+    """Shown when a device doesn't have a valid kiosk token."""
+    return render_template('kiosk_unauthorized.html')
+
+
+@web_bp.route('/kiosk/register/<token>')
+def kiosk_register(token):
+    """One-time registration URL. Sets a long-lived device token cookie."""
+    db = current_app.config['db']
+    device = db.validate_kiosk_token(token, client_ip=None)  # Skip IP check for registration
+    if not device:
+        return render_template('kiosk_unauthorized.html', error='Invalid or expired registration link.')
+
+    resp = redirect(url_for('web.kiosk_dashboard'))
+    # Set cookie for 10 years (effectively permanent)
+    resp.set_cookie(
+        'kiosk_device_token', token,
+        max_age=10 * 365 * 24 * 3600,
+        httponly=True,
+        samesite='Lax',
+        secure=request.is_secure,
+    )
+    return resp
 
 
 @web_bp.route('/kiosk/dashboard')
@@ -300,7 +323,8 @@ def kiosk_dashboard():
     db = current_app.config['db']
     jobs = get_all_jobs(db=db)
     printer = get_printer_status()
-    return render_template('kiosk.html', jobs=jobs, printer=printer)
+    device = getattr(request, 'kiosk_device', {})
+    return render_template('kiosk.html', jobs=jobs, printer=printer, device=device)
 
 
 @web_bp.route('/kiosk/api/jobs')
@@ -324,6 +348,35 @@ def kiosk_release_job(job_id):
 def kiosk_cancel_job(job_id):
     success, message, status = cancel_job(job_id, is_admin=True)
     return jsonify({'success': success, 'message' if success else 'error': message}), status if not success else 200
+
+
+# ─── Kiosk Device Admin Endpoints ─────────────────────────────────
+
+@web_bp.route('/api/admin/kiosk-devices', methods=['POST'])
+@login_required
+def create_kiosk_device():
+    if not is_admin():
+        return jsonify({'error': 'Admin required'}), 403
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    allowed_ip = data.get('allowed_ip', '').strip() or None
+    if not name:
+        return jsonify({'error': 'Device name is required'}), 400
+
+    db = current_app.config['db']
+    raw_token = db.create_kiosk_device(name, allowed_ip=allowed_ip)
+    registration_url = url_for('web.kiosk_register', token=raw_token, _external=True)
+    return jsonify({'token': raw_token, 'registration_url': registration_url})
+
+
+@web_bp.route('/api/admin/kiosk-devices/<int:device_id>', methods=['DELETE'])
+@login_required
+def delete_kiosk_device(device_id):
+    if not is_admin():
+        return jsonify({'error': 'Admin required'}), 403
+    db = current_app.config['db']
+    db.delete_kiosk_device(device_id)
+    return jsonify({'success': True})
 
 
 # ─── API Documentation ────────────────────────────────────────────────

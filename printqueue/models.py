@@ -82,6 +82,16 @@ class Database:
                     request_count INTEGER DEFAULT 1,
                     PRIMARY KEY (key_hash, window_start)
                 );
+
+                CREATE TABLE IF NOT EXISTS kiosk_devices (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    token_hash TEXT NOT NULL UNIQUE,
+                    allowed_ip TEXT,
+                    is_active BOOLEAN DEFAULT 1,
+                    registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_seen TIMESTAMP
+                );
             ''')
 
     # ─── API Key Management ────────────────────────────────────────────
@@ -279,6 +289,59 @@ class Database:
     def delete_known_device(self, device_id):
         with self.get_connection() as conn:
             conn.execute('DELETE FROM known_devices WHERE id = ?', (device_id,))
+
+    # ─── Kiosk Device Management ──────────────────────────────────────
+
+    def create_kiosk_device(self, name, allowed_ip=None):
+        """Create a kiosk device and return the raw registration token (shown once)."""
+        raw_token = f"kiosk_{secrets.token_urlsafe(48)}"
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+
+        with self.get_connection() as conn:
+            conn.execute(
+                'INSERT INTO kiosk_devices (name, token_hash, allowed_ip) VALUES (?, ?, ?)',
+                (name, token_hash, allowed_ip)
+            )
+        return raw_token
+
+    def validate_kiosk_token(self, raw_token, client_ip=None):
+        """Validate a kiosk device token. Returns device info dict or None."""
+        token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+        with self.get_connection() as conn:
+            row = conn.execute(
+                'SELECT * FROM kiosk_devices WHERE token_hash = ? AND is_active = 1',
+                (token_hash,)
+            ).fetchone()
+            if row:
+                device = dict(row)
+                # Check IP restriction if configured
+                if device.get('allowed_ip') and client_ip and device['allowed_ip'] != client_ip:
+                    return None
+                # Update last seen
+                conn.execute(
+                    'UPDATE kiosk_devices SET last_seen = CURRENT_TIMESTAMP WHERE id = ?',
+                    (device['id'],)
+                )
+                return device
+        return None
+
+    def list_kiosk_devices(self):
+        """List all kiosk devices."""
+        with self.get_connection() as conn:
+            rows = conn.execute(
+                'SELECT id, name, allowed_ip, is_active, registered_at, last_seen FROM kiosk_devices ORDER BY registered_at DESC'
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def deactivate_kiosk_device(self, device_id):
+        """Deactivate a kiosk device."""
+        with self.get_connection() as conn:
+            conn.execute('UPDATE kiosk_devices SET is_active = 0 WHERE id = ?', (device_id,))
+
+    def delete_kiosk_device(self, device_id):
+        """Delete a kiosk device."""
+        with self.get_connection() as conn:
+            conn.execute('DELETE FROM kiosk_devices WHERE id = ?', (device_id,))
 
     # ─── Cleanup ───────────────────────────────────────────────────────
 

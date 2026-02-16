@@ -6,7 +6,7 @@
 <ul class="nav nav-pills mb-3">
     <li class="nav-item"><a class="nav-link" href="{{ url_for('web.dashboard') }}"><i class="bi bi-grid me-1"></i>Dashboard</a></li>
     <li class="nav-item"><a class="nav-link active" href="{{ url_for('web.admin') }}"><i class="bi bi-gear me-1"></i>Admin</a></li>
-    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.kiosk_login') }}"><i class="bi bi-phone me-1"></i>Kiosk</a></li>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.kiosk_entry') }}"><i class="bi bi-phone me-1"></i>Kiosk</a></li>
     <li class="nav-item"><a class="nav-link" href="{{ url_for('web.api_docs') }}"><i class="bi bi-book me-1"></i>API</a></li>
 </ul>
 
@@ -16,6 +16,7 @@
     <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-apikeys"><i class="bi bi-key me-1"></i>API Keys</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-devices"><i class="bi bi-phone me-1"></i>Devices</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-emails"><i class="bi bi-envelope me-1"></i>Emails</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-kiosks"><i class="bi bi-laptop me-1"></i>Kiosks</button></li>
 </ul>
 
 <div class="tab-content">
@@ -207,6 +208,71 @@
     {% endif %}
 </div>
 
+<!-- ═══ Kiosk Devices Tab ═══ -->
+<div class="tab-pane fade" id="tab-kiosks">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-laptop me-1"></i>Kiosk Devices</h6>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('addKioskForm').classList.toggle('d-none')"><i class="bi bi-plus-lg me-1"></i>Register New</button>
+    </div>
+    <p class="text-body-tertiary mb-3" style="font-size: 13px;">Register devices for kiosk mode. Each device gets a unique one-time registration link.</p>
+
+    <div id="addKioskForm" class="card p-3 mb-3 d-none">
+        <div class="row g-2 align-items-end">
+            <div class="col">
+                <label class="form-label">Device Name</label>
+                <input id="kioskName" type="text" class="form-control form-control-sm" placeholder="e.g. Front Desk iPad">
+            </div>
+            <div class="col">
+                <label class="form-label">Allowed IP <small class="text-body-tertiary">(optional)</small></label>
+                <input id="kioskIP" type="text" class="form-control form-control-sm" placeholder="e.g. 192.168.1.50">
+            </div>
+            <div class="col-auto"><button class="btn btn-success btn-sm" onclick="registerKiosk()"><i class="bi bi-check-lg me-1"></i>Create</button></div>
+        </div>
+    </div>
+
+    <div id="kioskRegistrationResult" class="alert alert-success d-none" role="alert">
+        <strong><i class="bi bi-check-circle me-1"></i>Device registered!</strong> Open this link on the kiosk device:
+        <code id="kioskRegUrl" class="d-block mt-2 p-2 bg-dark rounded" style="user-select: all; word-break: break-all;"></code>
+        <small class="text-body-tertiary d-block mt-1">This link can only be used once. Copy it now.</small>
+    </div>
+
+    {% if kiosk_devices %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>Name</th><th>Status</th><th>Allowed IP</th><th>Registered</th><th>Last Seen</th><th>Actions</th></tr></thead>
+            <tbody>
+                {% for kd in kiosk_devices %}
+                <tr>
+                    <td><i class="bi bi-laptop me-1"></i>{{ kd.name }}</td>
+                    <td>
+                        {% if kd.is_active %}
+                        <span class="badge bg-success bg-opacity-25 text-success">Active</span>
+                        {% else %}
+                        <span class="badge bg-danger bg-opacity-25 text-danger">Revoked</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ kd.allowed_ip or '—' }}</td>
+                    <td><small class="text-body-tertiary">{{ kd.registered_at }}</small></td>
+                    <td><small class="text-body-tertiary">{{ kd.last_seen or 'Never' }}</small></td>
+                    <td>
+                        {% if kd.is_active %}
+                        <button onclick="deleteKiosk({{ kd.id }})" class="btn btn-danger btn-sm"><i class="bi bi-trash"></i></button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-state-icon">🖥️</div>
+        <h6 class="text-body-secondary">No kiosk devices registered</h6>
+        <p class="text-body-tertiary" style="font-size: 13px;">Register a device to enable kiosk mode</p>
+    </div>
+    {% endif %}
+</div>
+
 </div><!-- /tab-content -->
 {% endblock %}
 
@@ -381,6 +447,40 @@
         try {
             await fetch(`/api/v1/emails/${encodeURIComponent(email)}`, { method: 'DELETE' });
             Toast.success('Mapping deleted');
+            location.reload();
+        } catch (e) { Toast.error('Error: ' + e.message); }
+    }
+
+    // ─── Kiosk Devices ───────────────────────────────────────
+    async function registerKiosk() {
+        const name = document.getElementById('kioskName').value.trim();
+        const ip = document.getElementById('kioskIP').value.trim();
+        if (!name) { Toast.warning('Device name is required'); return; }
+
+        try {
+            const r = await fetch('/api/admin/kiosk-devices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, allowed_ip: ip })
+            });
+            const data = await r.json();
+            if (data.registration_url) {
+                document.getElementById('addKioskForm').classList.add('d-none');
+                document.getElementById('kioskRegistrationResult').classList.remove('d-none');
+                document.getElementById('kioskRegUrl').textContent = data.registration_url;
+                Toast.success('Kiosk device registered!');
+            } else {
+                Toast.error(data.error || 'Registration failed');
+            }
+        } catch (e) { Toast.error('Error: ' + e.message); }
+    }
+
+    async function deleteKiosk(id) {
+        const ok = await confirmAction({ title: 'Remove Kiosk Device', message: 'Remove this kiosk device? It will lose access immediately.', confirmText: 'Remove', type: 'danger' });
+        if (!ok) return;
+        try {
+            await fetch(`/api/admin/kiosk-devices/${id}`, { method: 'DELETE' });
+            Toast.success('Kiosk device removed');
             location.reload();
         } catch (e) { Toast.error('Error: ' + e.message); }
     }

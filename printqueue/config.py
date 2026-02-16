@@ -23,8 +23,6 @@ class Config:
     ADMIN_GROUPS = os.environ.get('ADMIN_GROUPS', 'admins,print-admins').split(',')
     ADMIN_USERS = os.environ.get('ADMIN_USERS', 'admin').split(',')
 
-    # Kiosk
-    KIOSK_PIN = os.environ.get('KIOSK_PIN', '1234')
 
     # Email Print
     MAIL_ENABLED = os.environ.get('MAIL_ENABLED', 'false').lower() == 'true'

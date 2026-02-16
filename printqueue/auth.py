@@ -121,10 +121,22 @@ def api_key_or_session(permission='read'):
 
 
 def kiosk_required(f):
-    """Decorator to require kiosk session"""
+    """Decorator to require kiosk device token authentication.
+    Validates the device token cookie against registered kiosk devices."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not session.get('kiosk_authenticated'):
-            return redirect(url_for('web.kiosk_login'))
+        token = request.cookies.get('kiosk_device_token')
+        if not token:
+            return redirect(url_for('web.kiosk_unauthorized'))
+
+        db = current_app.config['db']
+        client_ip = request.remote_addr
+        device = db.validate_kiosk_token(token, client_ip=client_ip)
+
+        if not device:
+            return redirect(url_for('web.kiosk_unauthorized'))
+
+        # Attach device info to request context
+        request.kiosk_device = device
         return f(*args, **kwargs)
     return decorated_function
