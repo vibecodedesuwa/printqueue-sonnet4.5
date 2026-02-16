@@ -81,6 +81,22 @@ class MailPrinterService:
                 except Exception as e:
                     print(f"[MailPrint] Error processing message {uid}: {e}")
 
+    def _decode_header(self, value):
+        """Decode MIME-encoded header (e.g. =?UTF-8?B?...?=)"""
+        if not value:
+            return value
+        try:
+            parts = email.header.decode_header(value)
+            decoded = []
+            for data, charset in parts:
+                if isinstance(data, bytes):
+                    decoded.append(data.decode(charset or 'utf-8', errors='replace'))
+                else:
+                    decoded.append(data)
+            return ' '.join(decoded)
+        except Exception:
+            return value
+
     def _process_message(self, client, uid):
         raw_message = client.fetch([uid], ['RFC822'])
         if uid not in raw_message:
@@ -88,7 +104,7 @@ class MailPrinterService:
 
         msg = email.message_from_bytes(raw_message[uid][b'RFC822'])
         sender = email.utils.parseaddr(msg['From'])[1]
-        subject = msg.get('Subject', 'Untitled')
+        subject = self._decode_header(msg.get('Subject', 'Untitled'))
 
         print(f"[MailPrint] Processing email from {sender}: {subject}")
 
@@ -101,7 +117,7 @@ class MailPrinterService:
             if part.get_content_maintype() == 'multipart':
                 continue
 
-            filename = part.get_filename()
+            filename = self._decode_header(part.get_filename())
             if not filename:
                 continue
 
