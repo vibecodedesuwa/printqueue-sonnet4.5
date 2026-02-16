@@ -58,11 +58,18 @@ def get_user_jobs(username=None, db=None):
 
             # Get real username from app database if available
             display_user = job_info.get('job-originating-user-name', 'Unknown')
+            submitted_via = 'ipp'
             if db:
                 try:
                     meta = db.get_job_meta(job_id)
-                    if meta and meta.get('submitted_by'):
-                        display_user = meta['submitted_by']
+                    if meta:
+                        submitted_via = meta.get('submitted_via', 'ipp')
+                        if meta.get('submitted_by'):
+                            display_user = meta['submitted_by']
+                        elif submitted_via == 'email':
+                            display_user = 'Email (unclaimed)'
+                        elif submitted_via == 'web':
+                            display_user = 'Web (unclaimed)'
                 except Exception:
                     pass
 
