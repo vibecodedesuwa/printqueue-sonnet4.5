@@ -202,13 +202,13 @@ class Database:
 
             if existing:
                 conn.execute(
-                    'UPDATE print_job_meta SET claimed_by = ?, claimed_at = CURRENT_TIMESTAMP WHERE cups_job_id = ?',
-                    (username, cups_job_id)
+                    'UPDATE print_job_meta SET claimed_by = ?, submitted_by = ?, claimed_at = CURRENT_TIMESTAMP WHERE cups_job_id = ?',
+                    (username, username, cups_job_id)
                 )
             else:
                 conn.execute(
-                    'INSERT INTO print_job_meta (cups_job_id, submitted_via, claimed_by, claimed_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)',
-                    (cups_job_id, 'ipp', username)
+                    'INSERT INTO print_job_meta (cups_job_id, submitted_via, submitted_by, claimed_by, claimed_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
+                    (cups_job_id, 'ipp', username, username)
                 )
             return True, "Job claimed successfully"
 
