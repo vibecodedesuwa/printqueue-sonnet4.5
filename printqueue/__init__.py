@@ -20,7 +20,7 @@ def create_app(config_class=Config):
     app.config['ADMIN_GROUPS'] = config_class.ADMIN_GROUPS
     app.config['ADMIN_USERS'] = config_class.ADMIN_USERS
     app.config['PRINTER_NAME'] = config_class.PRINTER_NAME
-    app.config['KIOSK_PIN'] = config_class.KIOSK_PIN
+
     app.config['API_RATE_LIMIT'] = config_class.API_RATE_LIMIT
     app.config['UNCLAIMED_JOB_TIMEOUT_HOURS'] = config_class.UNCLAIMED_JOB_TIMEOUT_HOURS
     app.config['UPLOAD_FOLDER'] = config_class.UPLOAD_FOLDER
