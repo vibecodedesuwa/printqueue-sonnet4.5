@@ -129,16 +129,20 @@ class MailPrinterService:
 
             # Map sender to user
             db = self.app.config['db']
-            username = db.get_email_mapping(sender) or sender
+            username = db.get_email_mapping(sender)  # None if no mapping
 
             # Submit to CUPS
             printer_name = self.app.config.get('PRINTER_NAME', 'HP_Smart_Tank_515')
             success, result = submit_print_job(converted, f"{subject} - {filename}", printer_name)
 
             if success:
+                # If no mapping, submitted_by=None makes it claimable
                 db.create_job_meta(result, submitted_via='email', original_filename=filename, submitted_by=username)
                 attachments_processed += 1
-                print(f"[MailPrint] Submitted job #{result} for {filename}")
+                if username:
+                    print(f"[MailPrint] Submitted job #{result} for {filename} (user: {username})")
+                else:
+                    print(f"[MailPrint] Submitted job #{result} for {filename} (from: {sender}, unclaimed)")
             else:
                 print(f"[MailPrint] Failed to submit {filename}: {result}")
 
