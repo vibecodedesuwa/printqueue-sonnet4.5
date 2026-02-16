@@ -4,150 +4,88 @@
 {% block extra_css %}
 <style>
     .upload-zone {
-        border: 2px dashed var(--border-color);
-        border-radius: var(--radius-lg);
+        border: 2px dashed var(--bs-border-color);
+        border-radius: 14px;
         padding: 48px 20px;
         text-align: center;
         cursor: pointer;
-        transition: all 0.3s;
-        margin-bottom: 24px;
-        background: rgba(108, 99, 255, 0.03);
+        transition: all 0.25s;
+        background: rgba(124, 111, 255, 0.02);
     }
     .upload-zone:hover,
     .upload-zone.dragover {
-        border-color: var(--accent-primary);
-        background: rgba(108, 99, 255, 0.08);
-        box-shadow: var(--shadow-glow);
+        border-color: var(--pq-accent);
+        background: rgba(124, 111, 255, 0.06);
+        box-shadow: var(--pq-glow);
     }
     .upload-zone .icon { font-size: 48px; margin-bottom: 12px; }
-    .upload-zone h3 { margin-bottom: 8px; }
-    .upload-zone p { color: var(--text-muted); font-size: 13px; }
 
-    .file-preview {
-        display: none;
-        background: var(--bg-card);
-        border-radius: var(--radius);
-        padding: 16px;
-        margin-bottom: 20px;
-        border: 1px solid var(--border-color);
-    }
-    .file-preview.active { display: flex; align-items: center; gap: 12px; }
-    .file-info { flex: 1; }
-    .file-name { font-weight: 600; font-size: 15px; }
-    .file-size { color: var(--text-muted); font-size: 13px; }
-
-    .print-options {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-        margin-bottom: 24px;
-    }
-    .option-group label {
-        display: block;
-        font-size: 12px;
-        color: var(--text-secondary);
-        margin-bottom: 6px;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        font-weight: 600;
-    }
-    .option-group input,
-    .option-group select {
-        width: 100%;
-        padding: 10px 14px;
-        border-radius: 8px;
-        background: var(--bg-primary);
-        border: 1px solid var(--border-color);
-        color: var(--text-primary);
-        font-family: inherit;
-        font-size: 14px;
-        transition: border-color 0.2s;
-    }
-    .option-group input:focus,
-    .option-group select:focus {
-        outline: none;
-        border-color: var(--accent-primary);
-    }
-    .checkbox-option {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 0;
-    }
-    .checkbox-option input[type="checkbox"] {
-        width: 18px; height: 18px;
-        accent-color: var(--accent-primary);
-    }
-
-    .supported-types {
-        color: var(--text-muted);
-        font-size: 12px;
-        text-align: center;
-        margin-top: -16px;
-        margin-bottom: 20px;
-    }
+    .file-preview { display: none; }
+    .file-preview.active { display: flex; }
 
     @media (max-width: 768px) {
-        .print-options { grid-template-columns: 1fr; }
         .upload-zone { padding: 32px 16px; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="nav-tabs">
-    <a class="nav-tab" href="{{ url_for('web.dashboard') }}">📋 My Jobs</a>
+<!-- Navigation -->
+<ul class="nav nav-pills mb-3">
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.dashboard') }}"><i class="bi bi-grid me-1"></i>My Jobs</a></li>
     {% if is_admin %}
-    <a class="nav-tab" href="{{ url_for('web.admin') }}">🔧 Admin</a>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.admin') }}"><i class="bi bi-gear me-1"></i>Admin</a></li>
     {% endif %}
-    <a class="nav-tab active" href="{{ url_for('upload.upload_page') }}">📤 Upload</a>
-</div>
+    <li class="nav-item"><a class="nav-link active" href="{{ url_for('upload.upload_page') }}"><i class="bi bi-upload me-1"></i>Upload</a></li>
+</ul>
 
 <form method="POST" enctype="multipart/form-data" id="uploadForm">
+    <!-- Drop zone -->
     <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-        <div class="icon">📄</div>
-        <h3>Drop file here or tap to browse</h3>
-        <p>PDF, PNG, JPG, DOCX, DOC, TXT — Max 50 MB</p>
+        <div class="icon"><i class="bi bi-cloud-arrow-up" style="font-size: 48px; color: var(--pq-accent);"></i></div>
+        <h5>Drop file here or tap to browse</h5>
+        <p class="text-body-tertiary mb-0" style="font-size: 13px;">PDF, PNG, JPG, DOCX, DOC, TXT — Max 50 MB</p>
     </div>
 
     <input type="file" id="fileInput" name="file" accept=".pdf,.png,.jpg,.jpeg,.docx,.doc,.txt" style="display:none">
 
-    <div class="file-preview" id="filePreview">
-        <span style="font-size: 32px;">📄</span>
-        <div class="file-info">
-            <div class="file-name" id="fileName"></div>
-            <div class="file-size" id="fileSize"></div>
+    <!-- File preview -->
+    <div class="file-preview card p-3 mb-3 align-items-center gap-3" id="filePreview">
+        <i class="bi bi-file-earmark-text" style="font-size: 32px; color: var(--pq-accent);"></i>
+        <div class="flex-grow-1">
+            <div class="fw-semibold" id="fileName"></div>
+            <small class="text-body-tertiary" id="fileSize"></small>
         </div>
-        <button type="button" class="btn btn-secondary btn-small" onclick="clearFile()">✗ Remove</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearFile()"><i class="bi bi-x-lg me-1"></i>Remove</button>
     </div>
 
-    <div class="print-options">
-        <div class="option-group">
-            <label>Copies</label>
-            <input type="number" name="copies" min="1" max="99" value="1">
+    <!-- Print options -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <label class="form-label">Copies</label>
+            <input type="number" name="copies" min="1" max="99" value="1" class="form-control">
         </div>
-        <div class="option-group">
-            <label>Color</label>
-            <select name="color">
+        <div class="col-6 col-md-3">
+            <label class="form-label">Color</label>
+            <select name="color" class="form-select">
                 <option value="color">🎨 Color</option>
-                <option value="bw">⬛ Black & White</option>
+                <option value="bw">⬛ B&W</option>
             </select>
         </div>
-        <div class="option-group">
-            <label>Page Range</label>
-            <input type="text" name="page_range" placeholder="e.g. 1-5, 8">
+        <div class="col-6 col-md-3">
+            <label class="form-label">Page Range</label>
+            <input type="text" name="page_range" placeholder="e.g. 1-5, 8" class="form-control">
         </div>
-        <div class="option-group">
-            <label>&nbsp;</label>
-            <div class="checkbox-option">
-                <input type="checkbox" name="duplex" id="duplex">
-                <label for="duplex" style="text-transform: none; font-size: 14px; cursor: pointer;">Double-sided printing</label>
+        <div class="col-6 col-md-3 d-flex align-items-end">
+            <div class="form-check mb-2">
+                <input type="checkbox" name="duplex" id="duplex" class="form-check-input">
+                <label class="form-check-label" for="duplex" style="text-transform: none; font-size: 13px;">Double-sided</label>
             </div>
         </div>
     </div>
 
-    <button type="submit" class="btn btn-primary" style="width: 100%; font-size: 16px; padding: 14px;" id="submitBtn" disabled>
-        🖨️ Submit Print Job
+    <button type="submit" class="btn btn-primary w-100 py-2" id="submitBtn" disabled style="font-size: 15px;">
+        <i class="bi bi-printer me-2"></i>Submit Print Job
     </button>
 </form>
 {% endblock %}
@@ -168,13 +106,9 @@
     }));
     dropZone.addEventListener('drop', (e) => {
         const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            fileInput.files = files;
-            showPreview(files[0]);
-        }
+        if (files.length > 0) { fileInput.files = files; showPreview(files[0]); }
     });
 
-    // File input change
     fileInput.addEventListener('change', () => {
         if (fileInput.files.length > 0) showPreview(fileInput.files[0]);
     });
@@ -194,10 +128,9 @@
         submitBtn.disabled = true;
     }
 
-    // Submit feedback
     document.getElementById('uploadForm').addEventListener('submit', () => {
         submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="loading"></span> Uploading...';
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Uploading...';
     });
 </script>
 {% endblock %}

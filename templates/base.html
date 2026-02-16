@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -7,595 +7,409 @@
 
     <!-- PWA -->
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-    <meta name="theme-color" content="#1a1a2e">
+    <meta name="theme-color" content="#0f0f1a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="PrintQ">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
 
-    <!-- Fonts -->
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
-        :root {
-            --bg-primary: #0f0f1a;
-            --bg-secondary: #1a1a2e;
-            --bg-card: #16213e;
-            --bg-card-hover: #1a2744;
-            --accent-primary: #6c63ff;
-            --accent-secondary: #e94560;
-            --accent-success: #00d9a6;
-            --accent-warning: #ffc048;
-            --accent-danger: #ff4757;
-            --text-primary: #e8e8f0;
-            --text-secondary: #a0a0b8;
-            --text-muted: #6b6b80;
-            --border-color: rgba(108, 99, 255, 0.15);
-            --glass-bg: rgba(26, 26, 46, 0.8);
-            --glass-border: rgba(108, 99, 255, 0.2);
-            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.3);
-            --shadow-glow: 0 0 20px rgba(108, 99, 255, 0.15);
-            --radius: 12px;
-            --radius-lg: 16px;
-        }
+        /* ═══════════════════════════════════════════════════════════
+           PrintQ Dark Theme — Bootstrap 5.3 Overrides
+           ═══════════════════════════════════════════════════════════ */
+        :root, [data-bs-theme="dark"] {
+            --bs-body-bg: #0a0a14;
+            --bs-body-color: #eaeaf2;
+            --bs-secondary-bg: #12121f;
+            --bs-tertiary-bg: #161625;
+            --bs-border-color: rgba(124, 111, 255, 0.12);
+            --bs-card-bg: #161625;
+            --bs-primary-rgb: 124, 111, 255;
+            --bs-success-rgb: 0, 217, 166;
+            --bs-danger-rgb: 255, 71, 87;
+            --bs-warning-rgb: 255, 192, 72;
+            --bs-info-rgb: 124, 111, 255;
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+            --pq-accent: #7c6fff;
+            --pq-accent-dim: rgba(124, 111, 255, 0.12);
+            --pq-glass-bg: rgba(18, 18, 31, 0.85);
+            --pq-glass-border: rgba(124, 111, 255, 0.12);
+            --pq-text-muted: #5e5e78;
+            --pq-glow: 0 0 20px rgba(124, 111, 255, 0.1);
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background-image:
-                radial-gradient(ellipse at 20% 50%, rgba(108, 99, 255, 0.08) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 20%, rgba(233, 69, 96, 0.06) 0%, transparent 50%);
-            min-height: 100vh;
-            color: var(--text-primary);
-            padding: 20px;
+                radial-gradient(ellipse at 15% 50%, rgba(124,111,255,0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 85% 20%, rgba(233,69,96,0.04) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(0,217,166,0.03) 0%, transparent 50%);
             -webkit-font-smoothing: antialiased;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
+            min-height: 100vh;
+            min-height: 100dvh;
         }
 
         /* ─── Header ──────────────────────────────────────────── */
-        .header {
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            padding: 16px 24px;
-            border-radius: var(--radius-lg);
-            border: 1px solid var(--glass-border);
-            box-shadow: var(--shadow-lg);
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .pq-header {
+            background: var(--pq-glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--pq-glass-border);
+            border-radius: 14px;
         }
-
-        .header h1 {
+        .pq-brand {
             font-size: 20px;
             font-weight: 700;
-            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            background: linear-gradient(135deg, var(--pq-accent) 0%, #a78bfa 50%, #e94560 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-        }
-
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .user-name {
-            color: var(--text-secondary);
-            font-weight: 500;
-            font-size: 14px;
-        }
-
-        /* ─── Mobile Menu ─────────────────────────────────────── */
-        .mobile-menu-toggle {
-            display: none;
-            background: none;
-            border: none;
-            color: var(--text-primary);
-            font-size: 24px;
-            cursor: pointer;
-            padding: 4px;
-        }
-
-        /* ─── Buttons ─────────────────────────────────────────── */
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 14px;
-            font-weight: 500;
+            letter-spacing: -0.02em;
             text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-            min-height: 44px;
-            min-width: 44px;
-            justify-content: center;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent-primary), #5b54e6);
-            color: white;
-            box-shadow: 0 4px 12px rgba(108, 99, 255, 0.3);
-        }
-        .btn-primary:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(108, 99, 255, 0.4);
-        }
-
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.06);
-            color: var(--text-secondary);
-            border: 1px solid var(--border-color);
-        }
-        .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.1);
-            color: var(--text-primary);
-        }
-
-        .btn-success {
-            background: linear-gradient(135deg, var(--accent-success), #00c49a);
-            color: #0a2620;
-            box-shadow: 0 4px 12px rgba(0, 217, 166, 0.3);
-        }
-        .btn-success:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(0, 217, 166, 0.4);
-        }
-
-        .btn-danger {
-            background: linear-gradient(135deg, var(--accent-danger), #e84040);
-            color: white;
-            box-shadow: 0 4px 12px rgba(255, 71, 87, 0.3);
-        }
-        .btn-danger:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 20px rgba(255, 71, 87, 0.4);
-        }
-
-        .btn-warning {
-            background: linear-gradient(135deg, var(--accent-warning), #f0a830);
-            color: #2a2000;
-        }
-
-        .btn-small {
-            padding: 8px 14px;
-            font-size: 12px;
-            min-height: 36px;
         }
 
         /* ─── Content Card ────────────────────────────────────── */
-        .content {
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            padding: 24px;
-            border-radius: var(--radius-lg);
-            border: 1px solid var(--glass-border);
-            box-shadow: var(--shadow-lg);
+        .pq-content {
+            background: var(--pq-glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--pq-glass-border);
+            border-radius: 14px;
         }
 
-        /* ─── Flash Messages ──────────────────────────────────── */
-        .flash-messages { margin-bottom: 20px; }
+        /* ─── Bootstrap Overrides ─────────────────────────────── */
+        .btn { font-weight: 600; font-size: 13px; letter-spacing: 0.01em; border-radius: 8px; }
+        .btn-primary { background: linear-gradient(135deg, var(--pq-accent), #6358e0); border: none; }
+        .btn-primary:hover { background: linear-gradient(135deg, #8b80ff, #7268f0); transform: translateY(-1px); }
+        .btn-success { background: linear-gradient(135deg, #00d9a6, #00c49a); border: none; color: #0a2620; }
+        .btn-success:hover { background: linear-gradient(135deg, #00e6b0, #00d4a4); color: #0a2620; }
+        .btn-danger { background: linear-gradient(135deg, #ff4757, #e84040); border: none; }
+        .btn-danger:hover { background: linear-gradient(135deg, #ff5c6a, #f05050); }
+        .btn-warning { background: linear-gradient(135deg, #ffc048, #f0a830); border: none; color: #2a2000; }
+        .btn:active { transform: scale(0.97) !important; }
 
-        .flash {
-            padding: 14px 20px;
-            border-radius: var(--radius);
-            margin-bottom: 10px;
-            font-size: 14px;
-            font-weight: 500;
-            animation: slideIn 0.3s ease;
-        }
+        .card { background: var(--bs-card-bg); border: 1px solid var(--bs-border-color); border-radius: 12px; }
 
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .flash-success {
-            background: rgba(0, 217, 166, 0.12);
-            color: var(--accent-success);
-            border-left: 3px solid var(--accent-success);
-        }
-        .flash-error {
-            background: rgba(255, 71, 87, 0.12);
-            color: var(--accent-danger);
-            border-left: 3px solid var(--accent-danger);
-        }
-        .flash-info {
-            background: rgba(108, 99, 255, 0.12);
-            color: var(--accent-primary);
-            border-left: 3px solid var(--accent-primary);
-        }
-
-        /* ─── Navigation Tabs ─────────────────────────────────── */
-        .nav-tabs {
-            display: flex;
-            gap: 4px;
-            margin-bottom: 24px;
-            border-bottom: 1px solid var(--border-color);
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        .nav-tab {
-            padding: 12px 20px;
-            background: none;
-            border: none;
-            border-bottom: 2px solid transparent;
-            cursor: pointer;
-            font-family: inherit;
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--text-muted);
-            text-decoration: none;
-            transition: all 0.25s;
-            white-space: nowrap;
-            min-height: 44px;
-        }
-
-        .nav-tab:hover { color: var(--text-secondary); }
-        .nav-tab.active {
-            color: var(--accent-primary);
-            border-bottom-color: var(--accent-primary);
-        }
-
-        /* ─── Table ───────────────────────────────────────────── */
-        .table-container {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 16px;
-        }
-
-        th, td {
-            padding: 12px 14px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-            font-size: 14px;
-        }
-
-        th {
-            font-weight: 600;
-            color: var(--text-secondary);
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        tr {
-            transition: background 0.2s;
-        }
-
-        tr:hover {
-            background: rgba(108, 99, 255, 0.04);
-        }
-
-        /* ─── Badges ──────────────────────────────────────────── */
-        .badge {
-            display: inline-flex;
-            padding: 4px 10px;
-            border-radius: 20px;
+        .table { --bs-table-bg: transparent; --bs-table-hover-bg: rgba(124,111,255,0.04); font-size: 13px; }
+        .table thead th {
             font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 0.02em;
             text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--pq-text-muted);
+            border-bottom-color: var(--bs-border-color);
+            font-weight: 600;
         }
+        .table td { border-bottom-color: rgba(255,255,255,0.03); vertical-align: middle; }
 
-        .badge-pending {
-            background: rgba(255, 192, 72, 0.15);
-            color: var(--accent-warning);
+        .nav-pills { background: rgba(255,255,255,0.03); border-radius: 10px; padding: 3px; }
+        .nav-pills .nav-link {
+            color: var(--pq-text-muted);
+            font-weight: 500;
+            font-size: 13px;
+            border-radius: 8px;
+            padding: 8px 16px;
         }
-        .badge-held {
-            background: rgba(108, 99, 255, 0.15);
-            color: var(--accent-primary);
+        .nav-pills .nav-link.active {
+            background: var(--bs-card-bg);
+            color: var(--bs-body-color);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
-        .badge-processing {
-            background: rgba(0, 217, 166, 0.15);
-            color: var(--accent-success);
-        }
-        .badge-completed {
-            background: rgba(255, 255, 255, 0.08);
-            color: var(--text-muted);
-        }
-        .badge-canceled {
-            background: rgba(255, 71, 87, 0.15);
-            color: var(--accent-danger);
-        }
-        .badge-unclaimed {
-            background: rgba(255, 192, 72, 0.2);
-            color: var(--accent-warning);
-            animation: pulse-badge 2s infinite;
-        }
+        .nav-pills .nav-link:not(.active):hover { color: var(--bs-body-color); }
 
-        @keyframes pulse-badge {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
+        .badge { font-weight: 600; font-size: 11px; letter-spacing: 0.03em; }
+
+        .form-control, .form-select {
+            background: var(--bs-body-bg);
+            border-color: var(--bs-border-color);
+            color: var(--bs-body-color);
+            border-radius: 8px;
+            font-size: 14px;
         }
+        .form-control:focus, .form-select:focus {
+            background: var(--bs-body-bg);
+            border-color: var(--pq-accent);
+            box-shadow: 0 0 0 3px rgba(124,111,255,0.15);
+            color: var(--bs-body-color);
+        }
+        .form-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--pq-text-muted); font-weight: 600; }
+
+        /* ─── Bootstrap Modal Override ────────────────────────── */
+        .modal-content {
+            background: #1e1e32;
+            border: 1px solid var(--pq-glass-border);
+            border-radius: 14px;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+        }
+        .modal-header { border-bottom: 1px solid rgba(255,255,255,0.04); padding: 20px 24px 16px; }
+        .modal-body { padding: 16px 24px; }
+        .modal-footer { border-top: 1px solid rgba(255,255,255,0.04); padding: 16px 24px; }
+        .btn-close { filter: invert(1); }
+
+        .modal-icon {
+            width: 40px; height: 40px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .modal-icon.text-danger { background: rgba(255,71,87,0.12); }
+        .modal-icon.text-warning { background: rgba(255,192,72,0.12); }
+        .modal-icon.text-success { background: rgba(0,217,166,0.12); }
+
+        /* ─── Bootstrap Toast Override ────────────────────────── */
+        .toast-container-fixed {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 11000;
+        }
+        .toast {
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 10px;
+            font-size: 13px;
+            border: 1px solid;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+        }
+        .toast.toast-success { background: rgba(0,217,166,0.15); border-color: rgba(0,217,166,0.25); color: #00d9a6; }
+        .toast.toast-error { background: rgba(255,71,87,0.15); border-color: rgba(255,71,87,0.25); color: #ff4757; }
+        .toast.toast-warning { background: rgba(255,192,72,0.15); border-color: rgba(255,192,72,0.25); color: #ffc048; }
+        .toast.toast-info { background: rgba(124,111,255,0.15); border-color: rgba(124,111,255,0.25); color: #7c6fff; }
+        .toast .toast-body { padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
+        .toast .btn-close { filter: none; font-size: 10px; }
+        .toast-success .btn-close { color: #00d9a6; }
+        .toast-error .btn-close { color: #ff4757; }
 
         /* ─── Status Bar ──────────────────────────────────────── */
         .status-bar {
-            background: rgba(255, 255, 255, 0.03);
-            padding: 14px 18px;
-            border-radius: var(--radius);
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.04);
+            border-radius: 10px;
         }
-
-        .status-indicator {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 14px;
-        }
-
         .status-dot {
-            width: 10px;
-            height: 10px;
+            width: 8px; height: 8px;
             border-radius: 50%;
-            animation: pulse 2s infinite;
+            display: inline-block;
+            flex-shrink: 0;
         }
-        .status-dot.online { background: var(--accent-success); box-shadow: 0 0 8px rgba(0, 217, 166, 0.5); }
-        .status-dot.offline { background: var(--accent-danger); box-shadow: 0 0 8px rgba(255, 71, 87, 0.5); }
+        .status-dot.online { background: #00d9a6; box-shadow: 0 0 8px rgba(0,217,166,0.5); animation: pulse 2s infinite; }
+        .status-dot.offline { background: #ff4757; box-shadow: 0 0 8px rgba(255,71,87,0.5); }
 
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
         }
 
-        /* ─── Empty State ─────────────────────────────────────── */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--text-muted);
-        }
-        .empty-state-icon { font-size: 48px; margin-bottom: 15px; }
-        .empty-state h3 { margin-bottom: 8px; color: var(--text-secondary); }
-
-        /* ─── Action Buttons ──────────────────────────────────── */
-        .action-buttons {
-            display: flex;
-            gap: 6px;
-        }
-
-        /* ─── Loading ─────────────────────────────────────────── */
-        .loading {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* ─── Cards (Mobile Layout) ───────────────────────────── */
-        .job-cards {
-            display: none;
-        }
+        /* ─── Job Cards (Mobile) ──────────────────────────────── */
+        .job-cards { display: none; }
 
         .job-card {
-            background: var(--bg-card);
-            border-radius: var(--radius);
+            background: var(--bs-card-bg);
+            border-radius: 12px;
             padding: 16px;
-            margin-bottom: 12px;
-            border: 1px solid var(--border-color);
+            margin-bottom: 10px;
+            border: 1px solid rgba(255,255,255,0.04);
             transition: all 0.2s;
         }
+        .job-card:hover { border-color: var(--bs-border-color); background: var(--bs-tertiary-bg); }
+        .job-card.unclaimed { border-color: rgba(255,192,72,0.3); background: rgba(255,192,72,0.03); }
+        .job-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; gap: 8px; }
+        .job-card-title { font-weight: 600; font-size: 14px; }
+        .job-card-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; font-size: 12px; color: var(--pq-text-muted); margin-bottom: 12px; }
+        .job-card-actions { display: flex; gap: 8px; }
+        .job-card-actions .btn { flex: 1; }
 
-        .job-card:hover {
-            border-color: var(--accent-primary);
-            box-shadow: var(--shadow-glow);
+        /* ─── Animations ──────────────────────────────────────── */
+        .fade-in { animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+
+        .live-indicator {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-size: 11px; font-weight: 600; color: #00d9a6;
+            text-transform: uppercase; letter-spacing: 0.05em;
         }
-
-        .job-card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 10px;
-        }
-
-        .job-card-title {
-            font-weight: 600;
-            font-size: 15px;
-        }
-
-        .job-card-meta {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 6px;
-            font-size: 13px;
-            color: var(--text-secondary);
-            margin-bottom: 12px;
-        }
-
-        .job-card-actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        .job-card-actions .btn {
-            flex: 1;
-        }
-
-        .job-card.unclaimed {
-            border-color: var(--accent-warning);
-            border-width: 2px;
-        }
-
-        /* ─── Section Headers ─────────────────────────────────── */
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
-
-        .section-header h2 {
-            font-size: 18px;
-            font-weight: 600;
-        }
-
-        .count-badge {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 24px;
-            height: 24px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 700;
-            padding: 0 8px;
-            background: var(--accent-primary);
-            color: white;
-            margin-left: 8px;
+        .live-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: #00d9a6; animation: pulse 2s infinite;
+            box-shadow: 0 0 6px rgba(0,217,166,0.5);
         }
 
         /* ─── Responsive ──────────────────────────────────────── */
         @media (max-width: 768px) {
-            body { padding: 12px; }
-
-            .header {
-                padding: 12px 16px;
-            }
-
-            .header h1 { font-size: 16px; }
-
-            .mobile-menu-toggle { display: block; }
-
-            .user-info.desktop-only { display: none; }
-            .user-info.mobile-menu {
-                display: none;
-                position: absolute;
-                top: 56px;
-                right: 12px;
-                background: var(--bg-card);
-                border: 1px solid var(--glass-border);
-                border-radius: var(--radius);
-                padding: 12px;
-                box-shadow: var(--shadow-lg);
-                z-index: 100;
-                flex-direction: column;
-                gap: 8px;
-            }
-            .user-info.mobile-menu.show { display: flex; }
-
-            .content { padding: 16px; }
-
-            .table-container { display: none; }
+            .pq-header { border-radius: 10px; }
+            .pq-content { border-radius: 10px; }
+            .table-responsive-wrapper { display: none; }
             .job-cards { display: block; }
-
-            .status-bar {
-                flex-direction: column;
-                gap: 8px;
-                align-items: flex-start;
-            }
-
-            .nav-tabs {
-                gap: 0;
-            }
-
-            .nav-tab {
-                padding: 10px 14px;
-                font-size: 13px;
-            }
         }
 
-        @media (max-width: 480px) {
-            .header h1 { font-size: 14px; }
+        /* ─── Misc ────────────────────────────────────────────── */
+        .count-badge {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 22px; height: 22px; border-radius: 11px;
+            font-size: 11px; font-weight: 700; padding: 0 7px;
+            background: var(--pq-accent); color: white; margin-left: 6px;
         }
+        .empty-state { text-align: center; padding: 48px 20px; color: var(--pq-text-muted); }
+        .empty-state-icon { font-size: 48px; margin-bottom: 12px; }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <div class="container">
-        <div class="header" style="position: relative;">
-            <h1>🖨️ PrintQ</h1>
-            {% if user %}
-            <div class="user-info desktop-only">
-                <span class="user-name">{{ user.name }}</span>
-                <a href="{{ url_for('upload.upload_page') }}" class="btn btn-primary btn-small">📤 Upload</a>
-                <a href="{{ url_for('web.logout') }}" class="btn btn-secondary btn-small">Logout</a>
-            </div>
-            <button class="mobile-menu-toggle" onclick="toggleMobileMenu()">☰</button>
-            <div class="user-info mobile-menu" id="mobileMenu">
-                <span class="user-name">{{ user.name }}</span>
-                <a href="{{ url_for('upload.upload_page') }}" class="btn btn-primary btn-small">📤 Upload & Print</a>
-                <a href="{{ url_for('web.logout') }}" class="btn btn-secondary btn-small">Logout</a>
-            </div>
-            {% endif %}
-        </div>
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-            <div class="flash-messages">
-                {% for category, message in messages %}
-                <div class="flash flash-{{ category }}">{{ message }}</div>
-                {% endfor %}
+    <!-- ═══ Toast Container (Bootstrap) ═══ -->
+    <div class="toast-container-fixed" id="toastContainer"></div>
+
+    <!-- ═══ Confirmation Modal (Bootstrap) ═══ -->
+    <div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content">
+                <div class="modal-header border-0 pb-0">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="modal-icon text-danger" id="confirmIcon"><i class="bi bi-exclamation-triangle-fill"></i></div>
+                        <h6 class="modal-title mb-0" id="confirmTitle">Confirm</h6>
+                    </div>
+                </div>
+                <div class="modal-body pt-2 text-secondary" id="confirmMessage">Are you sure?</div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal" id="confirmCancelBtn">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-danger" id="confirmOkBtn">Confirm</button>
+                </div>
             </div>
+        </div>
+    </div>
+
+    <div class="container py-3">
+        <!-- ═══ Header ═══ -->
+        <nav class="pq-header navbar px-3 mb-3">
+            <a class="pq-brand navbar-brand mb-0" href="{{ url_for('web.dashboard') }}">🖨️ PrintQ</a>
+            {% if user %}
+            <div class="d-none d-md-flex align-items-center gap-2">
+                <span class="badge bg-secondary bg-opacity-25 text-body-secondary fw-medium px-3 py-2">{{ user.name }}</span>
+                <a href="{{ url_for('upload.upload_page') }}" class="btn btn-primary btn-sm"><i class="bi bi-upload me-1"></i>Upload</a>
+                <a href="{{ url_for('web.logout') }}" class="btn btn-outline-secondary btn-sm">Logout</a>
+            </div>
+            <button class="btn btn-outline-secondary btn-sm d-md-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileMenu">
+                <i class="bi bi-list fs-5"></i>
+            </button>
             {% endif %}
+        </nav>
+
+        {% if user %}
+        <!-- ═══ Mobile Offcanvas Menu ═══ -->
+        <div class="offcanvas offcanvas-end" tabindex="-1" id="mobileMenu">
+            <div class="offcanvas-header">
+                <h6 class="offcanvas-title">{{ user.name }}</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body d-flex flex-column gap-2">
+                <a href="{{ url_for('web.dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-grid me-2"></i>Dashboard</a>
+                <a href="{{ url_for('upload.upload_page') }}" class="btn btn-primary"><i class="bi bi-upload me-2"></i>Upload & Print</a>
+                <hr class="my-2">
+                <a href="{{ url_for('web.logout') }}" class="btn btn-outline-danger btn-sm">Logout</a>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- ═══ Flash Messages ═══ -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="mb-3">
+            {% for category, message in messages %}
+            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show py-2 px-3" role="alert" style="font-size: 13px; border-radius: 10px;">
+                {{ message }}
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" style="font-size: 10px;"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% endwith %}
 
-        <div class="content">
+        <!-- ═══ Content ═══ -->
+        <div class="pq-content p-3 p-md-4">
             {% block content %}{% endblock %}
         </div>
     </div>
 
+    <!-- Bootstrap 5.3 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
     <script>
-        // Mobile menu
-        function toggleMobileMenu() {
-            document.getElementById('mobileMenu').classList.toggle('show');
+        // ═══════════════════════════════════════════════════════
+        // Toast Notification System (uses Bootstrap Toast)
+        // ═══════════════════════════════════════════════════════
+        const Toast = {
+            show(message, type = 'info', duration = 4000) {
+                const icons = { success: 'bi-check-circle-fill', error: 'bi-x-circle-fill', warning: 'bi-exclamation-triangle-fill', info: 'bi-info-circle-fill' };
+                const container = document.getElementById('toastContainer');
+                const el = document.createElement('div');
+                el.className = `toast toast-${type} fade show`;
+                el.setAttribute('role', 'alert');
+                el.innerHTML = `
+                    <div class="toast-body">
+                        <i class="bi ${icons[type] || icons.info}"></i>
+                        <span class="flex-grow-1">${message}</span>
+                        <button type="button" class="btn-close ms-2" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                `;
+                container.appendChild(el);
+                const bsToast = new bootstrap.Toast(el, { delay: duration, autohide: true });
+                bsToast.show();
+                el.addEventListener('hidden.bs.toast', () => el.remove());
+                return el;
+            },
+            success(msg, dur) { return this.show(msg, 'success', dur); },
+            error(msg, dur)   { return this.show(msg, 'error', dur || 6000); },
+            warning(msg, dur) { return this.show(msg, 'warning', dur); },
+            info(msg, dur)    { return this.show(msg, 'info', dur); },
+        };
+
+        // ═══════════════════════════════════════════════════════
+        // Confirmation Modal (uses Bootstrap Modal)
+        // ═══════════════════════════════════════════════════════
+        function confirmAction({ title = 'Confirm', message = 'Are you sure?', confirmText = 'Confirm', cancelText = 'Cancel', type = 'danger' }) {
+            return new Promise((resolve) => {
+                const iconMap = { danger: 'bi-exclamation-triangle-fill', warning: 'bi-exclamation-circle-fill', success: 'bi-check-circle-fill', info: 'bi-info-circle-fill' };
+                const btnMap  = { danger: 'btn-danger', warning: 'btn-warning', success: 'btn-success', info: 'btn-primary' };
+
+                document.getElementById('confirmTitle').textContent = title;
+                document.getElementById('confirmMessage').textContent = message;
+                document.getElementById('confirmIcon').className = `modal-icon text-${type}`;
+                document.getElementById('confirmIcon').innerHTML = `<i class="bi ${iconMap[type]}"></i>`;
+                const okBtn = document.getElementById('confirmOkBtn');
+                okBtn.className = `btn btn-sm ${btnMap[type]}`;
+                okBtn.textContent = confirmText;
+                document.getElementById('confirmCancelBtn').textContent = cancelText;
+
+                const modal = new bootstrap.Modal(document.getElementById('confirmModal'));
+                let resolved = false;
+
+                const cleanup = () => {
+                    okBtn.removeEventListener('click', onConfirm);
+                    document.getElementById('confirmModal').removeEventListener('hidden.bs.modal', onHidden);
+                };
+                const onConfirm = () => { resolved = true; modal.hide(); cleanup(); resolve(true); };
+                const onHidden = () => { if (!resolved) { cleanup(); resolve(false); } };
+
+                okBtn.addEventListener('click', onConfirm);
+                document.getElementById('confirmModal').addEventListener('hidden.bs.modal', onHidden);
+                modal.show();
+            });
         }
 
-        // Close mobile menu on outside click
-        document.addEventListener('click', (e) => {
-            const menu = document.getElementById('mobileMenu');
-            const toggle = document.querySelector('.mobile-menu-toggle');
-            if (menu && !menu.contains(e.target) && !toggle.contains(e.target)) {
-                menu.classList.remove('show');
-            }
-        });
-
-        // Auto-refresh jobs every 10 seconds
-        let refreshInterval;
-        function startAutoRefresh() {
-            refreshInterval = setInterval(() => { location.reload(); }, 10000);
-        }
-        function stopAutoRefresh() {
-            if (refreshInterval) clearInterval(refreshInterval);
-        }
-        window.addEventListener('load', startAutoRefresh);
-        document.addEventListener('click', () => {
-            stopAutoRefresh();
-            setTimeout(startAutoRefresh, 30000);
-        });
-
-        // Register service worker
+        // ═══════════════════════════════════════════════════════
+        // Service Worker
+        // ═══════════════════════════════════════════════════════
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/static/sw.js')
                 .catch(err => console.log('SW registration failed:', err));

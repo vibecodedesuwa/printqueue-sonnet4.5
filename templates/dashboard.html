@@ -2,218 +2,250 @@
 {% block title %}Dashboard — PrintQ{% endblock %}
 
 {% block content %}
-<div class="nav-tabs">
-    <a class="nav-tab active" href="{{ url_for('web.dashboard') }}">📋 My Jobs</a>
+<!-- Navigation -->
+<ul class="nav nav-pills mb-3">
+    <li class="nav-item"><a class="nav-link active" href="{{ url_for('web.dashboard') }}"><i class="bi bi-grid me-1"></i>My Jobs</a></li>
     {% if is_admin %}
-    <a class="nav-tab" href="{{ url_for('web.admin') }}">🔧 Admin</a>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.admin') }}"><i class="bi bi-gear me-1"></i>Admin</a></li>
     {% endif %}
-    <a class="nav-tab" href="{{ url_for('upload.upload_page') }}">📤 Upload</a>
-</div>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('upload.upload_page') }}"><i class="bi bi-upload me-1"></i>Upload</a></li>
+</ul>
 
 <!-- Printer Status -->
-<div class="status-bar" id="printerStatus">
-    <div class="status-indicator">
+<div class="status-bar d-flex justify-content-between align-items-center px-3 py-2 mb-3">
+    <div class="d-flex align-items-center gap-2" style="font-size: 13px;">
         <span class="status-dot online" id="statusDot"></span>
         <span id="statusText">Checking printer...</span>
     </div>
-    <span style="color: var(--text-muted); font-size: 13px;">Auto-refreshes every 10s</span>
+    <span class="live-indicator"><span class="live-dot"></span> Live</span>
 </div>
 
 <!-- Unclaimed Jobs Section -->
-{% if unclaimed_jobs %}
-<div style="margin-bottom: 24px;">
-    <div class="section-header">
-        <h2>🔔 Unclaimed Jobs <span class="count-badge" style="background: var(--accent-warning);">{{ unclaimed_jobs|length }}</span></h2>
-        <span style="color: var(--text-muted); font-size: 13px;">Tap "Claim" if it's yours</span>
+<div id="unclaimedSection" class="mb-4" style="display: none;">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-bell me-1 text-warning"></i>Unclaimed Jobs <span class="count-badge" style="background: #ffc048;" id="unclaimedCount">0</span></h6>
+        <small class="text-body-tertiary">Tap "Claim" if it's yours</small>
     </div>
 
-    <!-- Desktop table -->
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Document</th>
-                    <th>From</th>
-                    <th>Status</th>
-                    <th>Time</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for job in unclaimed_jobs %}
-                <tr style="border-left: 3px solid var(--accent-warning);">
-                    <td><strong>#{{ job.id }}</strong></td>
-                    <td>{{ job.name }}</td>
-                    <td>{{ job.user }}</td>
-                    <td><span class="badge badge-unclaimed">Unclaimed</span></td>
-                    <td>{{ job.time }}</td>
-                    <td>
-                        <button onclick="claimJob({{ job.id }})" class="btn btn-warning btn-small">🙋 Claim</button>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
+    <!-- Desktop -->
+    <div class="table-responsive-wrapper">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>ID</th><th>Document</th><th>From</th><th>Status</th><th>Time</th><th>Actions</th></tr></thead>
+            <tbody id="unclaimedTableBody"></tbody>
         </table>
     </div>
-
-    <!-- Mobile cards -->
-    <div class="job-cards">
-        {% for job in unclaimed_jobs %}
-        <div class="job-card unclaimed" data-job-id="{{ job.id }}">
-            <div class="job-card-header">
-                <span class="job-card-title">#{{ job.id }} — {{ job.name }}</span>
-                <span class="badge badge-unclaimed">Unclaimed</span>
-            </div>
-            <div class="job-card-meta">
-                <span>📱 From: {{ job.user }}</span>
-                <span>🕐 {{ job.time }}</span>
-            </div>
-            <div class="job-card-actions">
-                <button onclick="claimJob({{ job.id }})" class="btn btn-warning btn-small">🙋 Claim</button>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
+    <!-- Mobile -->
+    <div class="job-cards" id="unclaimedCards"></div>
 </div>
-{% endif %}
 
 <!-- My Jobs Section -->
-<div class="section-header">
-    <h2>📄 My Jobs <span class="count-badge">{{ jobs|length }}</span></h2>
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h6 class="mb-0 fw-semibold"><i class="bi bi-file-earmark-text me-1"></i>My Jobs <span class="count-badge" id="myJobsCount">0</span></h6>
 </div>
 
-{% if jobs %}
-
-<!-- Desktop table -->
-<div class="table-container">
-    <table>
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Document</th>
-                <th>Status</th>
-                <th>Pages</th>
-                <th>Size</th>
-                <th>Time</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for job in jobs %}
-            <tr data-job-id="{{ job.id }}">
-                <td><strong>#{{ job.id }}</strong></td>
-                <td>{{ job.name }}</td>
-                <td><span class="badge badge-{{ job.state_text.lower() }}">{{ job.state_text }}</span></td>
-                <td>{{ job.pages if job.pages > 0 else 'N/A' }}</td>
-                <td>{{ job.size }} KB</td>
-                <td>{{ job.time }}</td>
-                <td>
-                    <div class="action-buttons">
-                        {% if job.state in [3, 4] %}
-                        <button onclick="releaseJob({{ job.id }})" class="btn btn-success btn-small">✓ Release</button>
-                        {% endif %}
-                        {% if job.state not in [7, 8, 9] %}
-                        <button onclick="cancelJob({{ job.id }})" class="btn btn-danger btn-small">✗ Cancel</button>
-                        {% endif %}
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
-<!-- Mobile cards -->
-<div class="job-cards">
-    {% for job in jobs %}
-    <div class="job-card" data-job-id="{{ job.id }}">
-        <div class="job-card-header">
-            <span class="job-card-title">#{{ job.id }} — {{ job.name }}</span>
-            <span class="badge badge-{{ job.state_text.lower() }}">{{ job.state_text }}</span>
-        </div>
-        <div class="job-card-meta">
-            <span>📄 {{ job.pages if job.pages > 0 else 'N/A' }} pages</span>
-            <span>💾 {{ job.size }} KB</span>
-            <span>🕐 {{ job.time }}</span>
-        </div>
-        <div class="job-card-actions">
-            {% if job.state in [3, 4] %}
-            <button onclick="releaseJob({{ job.id }})" class="btn btn-success btn-small">✓ Release</button>
-            {% endif %}
-            {% if job.state not in [7, 8, 9] %}
-            <button onclick="cancelJob({{ job.id }})" class="btn btn-danger btn-small">✗ Cancel</button>
-            {% endif %}
-        </div>
+<div id="myJobsContent">
+    <!-- Desktop -->
+    <div class="table-responsive-wrapper">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>ID</th><th>Document</th><th>Status</th><th>Pages</th><th>Size</th><th>Time</th><th>Actions</th></tr></thead>
+            <tbody id="myJobsTableBody"></tbody>
+        </table>
     </div>
-    {% endfor %}
+    <!-- Mobile -->
+    <div class="job-cards" id="myJobsCards"></div>
 </div>
 
-{% else %}
-<div class="empty-state">
+<div class="empty-state" id="emptyState" style="display: none;">
     <div class="empty-state-icon">🖨️</div>
-    <h3>No print jobs</h3>
-    <p>Upload a file or print from your device to get started!</p>
-    <a href="{{ url_for('upload.upload_page') }}" class="btn btn-primary" style="margin-top: 16px;">📤 Upload & Print</a>
+    <h6 class="text-body-secondary">No print jobs</h6>
+    <p class="text-body-tertiary mb-3" style="font-size: 13px;">Upload a file or print from your device to get started!</p>
+    <a href="{{ url_for('upload.upload_page') }}" class="btn btn-primary btn-sm"><i class="bi bi-upload me-1"></i>Upload & Print</a>
 </div>
-{% endif %}
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    // Fetch printer status
-    fetch('{{ url_for("web.api_printer_status") }}')
-        .then(r => r.json())
-        .then(data => {
-            const dot = document.getElementById('statusDot');
-            const text = document.getElementById('statusText');
-            if (data.error) {
-                dot.className = 'status-dot offline';
-                text.textContent = '⚠️ ' + data.error;
-            } else {
-                dot.className = data.state === 3 ? 'status-dot online' : 'status-dot offline';
-                text.textContent = data.name + ' — ' + data.state_text;
-            }
-        })
-        .catch(() => {
-            document.getElementById('statusDot').className = 'status-dot offline';
-            document.getElementById('statusText').textContent = '⚠️ Unable to reach printer';
-        });
+    const POLL_INTERVAL = 5000;
+    let prevJobIds = new Set();
+    let prevUnclaimedIds = new Set();
 
-    function releaseJob(jobId) {
-        if (!confirm('Release this job for printing?')) return;
-        fetch(`/api/job/${jobId}/release`, { method: 'POST' })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) location.reload();
-                else alert('Error: ' + (data.error || data.message));
-            })
-            .catch(err => alert('Error: ' + err));
+    // ─── Render helpers ─────────────────────────────────────
+    function badgeHtml(stateText) {
+        const map = { held: 'primary', pending: 'warning', processing: 'success', completed: 'secondary', canceled: 'danger' };
+        const cls = map[(stateText || '').toLowerCase()] || 'secondary';
+        return `<span class="badge bg-${cls} bg-opacity-25 text-${cls}">${stateText}</span>`;
     }
 
-    function cancelJob(jobId) {
-        if (!confirm('Cancel this print job?')) return;
-        fetch(`/api/job/${jobId}/cancel`, { method: 'POST' })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) location.reload();
-                else alert('Error: ' + (data.error || data.message));
-            })
-            .catch(err => alert('Error: ' + err));
+    function actionBtns(job) {
+        let h = '';
+        if ([3, 4].includes(job.state))
+            h += `<button onclick="releaseJob(${job.id})" class="btn btn-success btn-sm"><i class="bi bi-check-lg me-1"></i><span class="d-none d-lg-inline">Release</span></button>`;
+        if (![7, 8, 9].includes(job.state))
+            h += `<button onclick="cancelJob(${job.id})" class="btn btn-danger btn-sm ms-1"><i class="bi bi-x-lg me-1"></i><span class="d-none d-lg-inline">Cancel</span></button>`;
+        return h;
     }
 
-    function claimJob(jobId) {
-        fetch(`/api/job/${jobId}/claim`, { method: 'POST' })
+    function renderRow(job, isNew) {
+        return `<tr class="${isNew ? 'fade-in' : ''}" data-job-id="${job.id}">
+            <td><strong>#${job.id}</strong></td>
+            <td class="text-truncate" style="max-width: 200px;">${job.name || 'Untitled'}</td>
+            <td>${badgeHtml(job.state_text)}</td>
+            <td>${job.pages > 0 ? job.pages : '—'}</td>
+            <td>${job.size} KB</td>
+            <td><small class="text-body-tertiary">${job.time}</small></td>
+            <td>${actionBtns(job)}</td>
+        </tr>`;
+    }
+
+    function renderCard(job, isNew) {
+        return `<div class="job-card ${isNew ? 'fade-in' : ''}" data-job-id="${job.id}">
+            <div class="job-card-header">
+                <span class="job-card-title">#${job.id} — ${job.name || 'Untitled'}</span>
+                ${badgeHtml(job.state_text)}
+            </div>
+            <div class="job-card-meta">
+                <span><i class="bi bi-file-earmark"></i> ${job.pages > 0 ? job.pages : '—'} pg</span>
+                <span><i class="bi bi-hdd"></i> ${job.size} KB</span>
+                <span><i class="bi bi-clock"></i> ${job.time}</span>
+            </div>
+            <div class="job-card-actions">${actionBtns(job)}</div>
+        </div>`;
+    }
+
+    function renderUnclaimedRow(job, isNew) {
+        return `<tr class="${isNew ? 'fade-in' : ''}" style="border-left: 3px solid #ffc048;">
+            <td><strong>#${job.id}</strong></td>
+            <td>${job.name || 'Untitled'}</td>
+            <td>${job.user}</td>
+            <td><span class="badge bg-warning bg-opacity-25 text-warning">Unclaimed</span></td>
+            <td><small class="text-body-tertiary">${job.time}</small></td>
+            <td><button onclick="claimJob(${job.id})" class="btn btn-warning btn-sm"><i class="bi bi-hand-index me-1"></i>Claim</button></td>
+        </tr>`;
+    }
+
+    function renderUnclaimedCard(job, isNew) {
+        return `<div class="job-card unclaimed ${isNew ? 'fade-in' : ''}" data-job-id="${job.id}">
+            <div class="job-card-header">
+                <span class="job-card-title">#${job.id} — ${job.name || 'Untitled'}</span>
+                <span class="badge bg-warning bg-opacity-25 text-warning">Unclaimed</span>
+            </div>
+            <div class="job-card-meta">
+                <span><i class="bi bi-phone"></i> ${job.user}</span>
+                <span><i class="bi bi-clock"></i> ${job.time}</span>
+            </div>
+            <div class="job-card-actions">
+                <button onclick="claimJob(${job.id})" class="btn btn-warning btn-sm"><i class="bi bi-hand-index me-1"></i>Claim</button>
+            </div>
+        </div>`;
+    }
+
+    // ─── Update DOM ──────────────────────────────────────────
+    function updateMyJobs(jobs) {
+        const newIds = new Set(jobs.map(j => j.id));
+        document.getElementById('myJobsCount').textContent = jobs.length;
+
+        if (jobs.length === 0) {
+            document.getElementById('myJobsTableBody').innerHTML = '';
+            document.getElementById('myJobsCards').innerHTML = '';
+            document.getElementById('emptyState').style.display = 'block';
+            document.getElementById('myJobsContent').style.display = 'none';
+        } else {
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('myJobsContent').style.display = '';
+            document.getElementById('myJobsTableBody').innerHTML = jobs.map(j => renderRow(j, !prevJobIds.has(j.id))).join('');
+            document.getElementById('myJobsCards').innerHTML = jobs.map(j => renderCard(j, !prevJobIds.has(j.id))).join('');
+        }
+        prevJobIds = newIds;
+    }
+
+    function updateUnclaimed(jobs) {
+        const newIds = new Set(jobs.map(j => j.id));
+        const section = document.getElementById('unclaimedSection');
+        document.getElementById('unclaimedCount').textContent = jobs.length;
+
+        if (jobs.length === 0) {
+            section.style.display = 'none';
+        } else {
+            section.style.display = 'block';
+            document.getElementById('unclaimedTableBody').innerHTML = jobs.map(j => renderUnclaimedRow(j, !prevUnclaimedIds.has(j.id))).join('');
+            document.getElementById('unclaimedCards').innerHTML = jobs.map(j => renderUnclaimedCard(j, !prevUnclaimedIds.has(j.id))).join('');
+        }
+        prevUnclaimedIds = newIds;
+    }
+
+    function updatePrinterStatus() {
+        fetch('{{ url_for("web.api_printer_status") }}')
             .then(r => r.json())
             .then(data => {
-                if (data.success) {
-                    location.reload();
+                const dot = document.getElementById('statusDot');
+                const text = document.getElementById('statusText');
+                if (data.error) {
+                    dot.className = 'status-dot offline';
+                    text.textContent = '⚠️ ' + data.error;
                 } else {
-                    alert(data.message || 'Could not claim this job');
+                    dot.className = data.state === 3 ? 'status-dot online' : 'status-dot offline';
+                    text.textContent = data.name + ' — ' + data.state_text;
                 }
             })
-            .catch(err => alert('Error: ' + err));
+            .catch(() => {
+                document.getElementById('statusDot').className = 'status-dot offline';
+                document.getElementById('statusText').textContent = '⚠️ Unable to reach printer';
+            });
+    }
+
+    // ─── Polling ─────────────────────────────────────────────
+    function refreshAll() {
+        fetch('{{ url_for("web.api_jobs") }}')
+            .then(r => r.json()).then(updateMyJobs).catch(console.error);
+        fetch('{{ url_for("web.api_unclaimed_jobs") }}')
+            .then(r => r.json()).then(updateUnclaimed).catch(console.error);
+    }
+
+    refreshAll();
+    updatePrinterStatus();
+    setInterval(refreshAll, POLL_INTERVAL);
+    setInterval(updatePrinterStatus, 15000);
+
+    // ─── Job Actions ─────────────────────────────────────────
+    async function releaseJob(jobId) {
+        const ok = await confirmAction({
+            title: 'Release Job',
+            message: `Release job #${jobId} for printing?`,
+            confirmText: 'Release',
+            type: 'success'
+        });
+        if (!ok) return;
+        try {
+            const r = await fetch(`/api/job/${jobId}/release`, { method: 'POST' });
+            const data = await r.json();
+            if (data.success) { Toast.success('Job released for printing!'); refreshAll(); }
+            else Toast.error(data.error || data.message || 'Failed to release job');
+        } catch (e) { Toast.error('Network error: ' + e.message); }
+    }
+
+    async function cancelJob(jobId) {
+        const ok = await confirmAction({
+            title: 'Cancel Job',
+            message: `Cancel print job #${jobId}? This cannot be undone.`,
+            confirmText: 'Cancel Job',
+            type: 'danger'
+        });
+        if (!ok) return;
+        try {
+            const r = await fetch(`/api/job/${jobId}/cancel`, { method: 'POST' });
+            const data = await r.json();
+            if (data.success) { Toast.success('Job cancelled'); refreshAll(); }
+            else Toast.error(data.error || data.message || 'Failed to cancel job');
+        } catch (e) { Toast.error('Network error: ' + e.message); }
+    }
+
+    async function claimJob(jobId) {
+        try {
+            const r = await fetch(`/api/job/${jobId}/claim`, { method: 'POST' });
+            const data = await r.json();
+            if (data.success) { Toast.success('Job claimed! It will appear in your jobs.'); refreshAll(); }
+            else Toast.warning(data.message || 'Could not claim this job');
+        } catch (e) { Toast.error('Network error: ' + e.message); }
     }
 </script>
 {% endblock %}

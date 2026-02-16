@@ -2,148 +2,87 @@
 {% block title %}Admin — PrintQ{% endblock %}
 
 {% block content %}
-<div class="nav-tabs">
-    <a class="nav-tab" href="{{ url_for('web.dashboard') }}">📋 Dashboard</a>
-    <a class="nav-tab active" href="{{ url_for('web.admin') }}">🔧 Admin</a>
-    <a class="nav-tab" href="{{ url_for('web.kiosk_login') }}">📱 Kiosk</a>
-    <a class="nav-tab" href="{{ url_for('web.api_docs') }}">📚 API Docs</a>
-</div>
+<!-- Navigation -->
+<ul class="nav nav-pills mb-3">
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.dashboard') }}"><i class="bi bi-grid me-1"></i>Dashboard</a></li>
+    <li class="nav-item"><a class="nav-link active" href="{{ url_for('web.admin') }}"><i class="bi bi-gear me-1"></i>Admin</a></li>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.kiosk_login') }}"><i class="bi bi-phone me-1"></i>Kiosk</a></li>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.api_docs') }}"><i class="bi bi-book me-1"></i>API</a></li>
+</ul>
 
-<!-- Tab Navigation -->
-<div class="nav-tabs" id="adminTabs">
-    <button class="nav-tab active" onclick="showTab('jobs')">All Jobs</button>
-    <button class="nav-tab" onclick="showTab('apikeys')">API Keys</button>
-    <button class="nav-tab" onclick="showTab('devices')">Device Mapping</button>
-    <button class="nav-tab" onclick="showTab('emails')">Email Mapping</button>
-</div>
+<!-- Sub Tabs -->
+<ul class="nav nav-pills nav-fill mb-3" id="adminTabs" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-jobs"><i class="bi bi-printer me-1"></i>All Jobs</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-apikeys"><i class="bi bi-key me-1"></i>API Keys</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-devices"><i class="bi bi-phone me-1"></i>Devices</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-emails"><i class="bi bi-envelope me-1"></i>Emails</button></li>
+</ul>
 
-<!-- Jobs Tab -->
-<div id="tab-jobs" class="tab-content">
-    <div class="section-header">
-        <h2>📋 All Print Jobs <span class="count-badge">{{ jobs|length }}</span></h2>
+<div class="tab-content">
+
+<!-- ═══ Jobs Tab ═══ -->
+<div class="tab-pane fade show active" id="tab-jobs">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-list-ul me-1"></i>All Print Jobs <span class="count-badge" id="adminJobsCount">0</span></h6>
+        <span class="live-indicator"><span class="live-dot"></span> Live</span>
     </div>
 
-    {% if jobs %}
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>User</th>
-                    <th>Document</th>
-                    <th>Status</th>
-                    <th>Pages</th>
-                    <th>Size</th>
-                    <th>Time</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for job in jobs %}
-                <tr data-job-id="{{ job.id }}">
-                    <td><strong>#{{ job.id }}</strong></td>
-                    <td>{{ job.user }}</td>
-                    <td>{{ job.name }}</td>
-                    <td><span class="badge badge-{{ job.state_text.lower() }}">{{ job.state_text }}</span></td>
-                    <td>{{ job.pages if job.pages > 0 else 'N/A' }}</td>
-                    <td>{{ job.size }} KB</td>
-                    <td>{{ job.time }}</td>
-                    <td>
-                        <div class="action-buttons">
-                            {% if job.state in [3, 4] %}
-                            <button onclick="releaseJob({{ job.id }})" class="btn btn-success btn-small">✓</button>
-                            {% endif %}
-                            {% if job.state not in [7, 8, 9] %}
-                            <button onclick="cancelJob({{ job.id }})" class="btn btn-danger btn-small">✗</button>
-                            {% endif %}
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
+    <div class="table-responsive-wrapper">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>ID</th><th>User</th><th>Document</th><th>Status</th><th>Pages</th><th>Size</th><th>Time</th><th>Actions</th></tr></thead>
+            <tbody id="adminJobsTableBody"></tbody>
         </table>
     </div>
-
-    <!-- Mobile cards -->
-    <div class="job-cards">
-        {% for job in jobs %}
-        <div class="job-card" data-job-id="{{ job.id }}">
-            <div class="job-card-header">
-                <span class="job-card-title">#{{ job.id }} — {{ job.name }}</span>
-                <span class="badge badge-{{ job.state_text.lower() }}">{{ job.state_text }}</span>
-            </div>
-            <div class="job-card-meta">
-                <span>👤 {{ job.user }}</span>
-                <span>📄 {{ job.pages if job.pages > 0 else 'N/A' }} pg</span>
-                <span>💾 {{ job.size }} KB</span>
-                <span>🕐 {{ job.time }}</span>
-            </div>
-            <div class="job-card-actions">
-                {% if job.state in [3, 4] %}
-                <button onclick="releaseJob({{ job.id }})" class="btn btn-success btn-small">✓ Release</button>
-                {% endif %}
-                {% if job.state not in [7, 8, 9] %}
-                <button onclick="cancelJob({{ job.id }})" class="btn btn-danger btn-small">✗ Cancel</button>
-                {% endif %}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% else %}
-    <div class="empty-state">
+    <div class="job-cards" id="adminJobsCards"></div>
+    <div class="empty-state" id="adminJobsEmpty" style="display:none;">
         <div class="empty-state-icon">📋</div>
-        <h3>No jobs in queue</h3>
+        <h6 class="text-body-secondary">No jobs in queue</h6>
     </div>
-    {% endif %}
 </div>
 
-<!-- API Keys Tab -->
-<div id="tab-apikeys" class="tab-content" style="display:none;">
-    <div class="section-header">
-        <h2>🔑 API Keys</h2>
-        <button class="btn btn-primary btn-small" onclick="createApiKey()">+ New Key</button>
+<!-- ═══ API Keys Tab ═══ -->
+<div class="tab-pane fade" id="tab-apikeys">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-key me-1"></i>API Keys</h6>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('newKeyForm').classList.toggle('d-none')"><i class="bi bi-plus-lg me-1"></i>New Key</button>
     </div>
 
-    <div id="newKeyForm" style="display:none; margin-bottom: 20px; padding: 16px; background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border-color);">
-        <h3 style="margin-bottom: 12px;">Create API Key</h3>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-            <input id="keyName" type="text" placeholder="Key name" style="padding: 10px; border-radius: 8px; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); font-family: inherit;">
-            <input id="keyOwner" type="text" placeholder="Owner" value="{{ user.username }}" style="padding: 10px; border-radius: 8px; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); font-family: inherit;">
-        </div>
-        <div style="margin-top: 12px;">
-            <label style="font-size: 13px; color: var(--text-secondary);">Permissions:</label>
-            <div style="display: flex; gap: 12px; margin-top: 6px;">
-                <label style="font-size: 14px; cursor: pointer;"><input type="checkbox" id="permRead" checked> Read</label>
-                <label style="font-size: 14px; cursor: pointer;"><input type="checkbox" id="permWrite"> Write</label>
-                <label style="font-size: 14px; cursor: pointer;"><input type="checkbox" id="permAdmin"> Admin</label>
+    <!-- New Key Form -->
+    <div id="newKeyForm" class="card p-3 mb-3 d-none">
+        <div class="row g-2 mb-2">
+            <div class="col-md-6">
+                <label class="form-label">Key Name</label>
+                <input id="keyName" type="text" class="form-control form-control-sm" placeholder="e.g. Mobile App">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Owner</label>
+                <input id="keyOwner" type="text" class="form-control form-control-sm" value="{{ user.username }}">
             </div>
         </div>
-        <div style="margin-top: 12px; display: flex; gap: 8px;">
-            <button class="btn btn-success btn-small" onclick="submitApiKey()">Create</button>
-            <button class="btn btn-secondary btn-small" onclick="document.getElementById('newKeyForm').style.display='none'">Cancel</button>
+        <div class="mb-2">
+            <label class="form-label">Permissions</label>
+            <div class="d-flex gap-3">
+                <div class="form-check"><input type="checkbox" class="form-check-input" id="permRead" checked><label class="form-check-label" for="permRead">Read</label></div>
+                <div class="form-check"><input type="checkbox" class="form-check-input" id="permWrite"><label class="form-check-label" for="permWrite">Write</label></div>
+                <div class="form-check"><input type="checkbox" class="form-check-input" id="permAdmin"><label class="form-check-label" for="permAdmin">Admin</label></div>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-success btn-sm" onclick="submitApiKey()"><i class="bi bi-check-lg me-1"></i>Create</button>
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('newKeyForm').classList.add('d-none')">Cancel</button>
         </div>
     </div>
 
-    <div id="newKeyResult" style="display:none; margin-bottom: 20px; padding: 16px; background: rgba(0,217,166,0.1); border-radius: var(--radius); border: 1px solid var(--accent-success);">
-        <p style="margin-bottom: 8px; font-weight: 600; color: var(--accent-success);">✅ Key created! Copy it now — it won't be shown again:</p>
-        <code id="newKeyValue" style="display: block; padding: 12px; background: var(--bg-primary); border-radius: 8px; word-break: break-all; font-size: 14px; user-select: all;"></code>
+    <!-- Key Result -->
+    <div id="newKeyResult" class="alert alert-success d-none" role="alert">
+        <strong><i class="bi bi-check-circle me-1"></i>Key created!</strong> Copy it now — it won't be shown again:
+        <code id="newKeyValue" class="d-block mt-2 p-2 bg-dark rounded" style="user-select: all; word-break: break-all;"></code>
     </div>
 
     {% if api_keys %}
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>Prefix</th>
-                    <th>Name</th>
-                    <th>Owner</th>
-                    <th>Permissions</th>
-                    <th>Created</th>
-                    <th>Last Used</th>
-                    <th>Requests</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>Prefix</th><th>Name</th><th>Owner</th><th>Permissions</th><th>Created</th><th>Last Used</th><th>Requests</th><th>Actions</th></tr></thead>
             <tbody>
                 {% for key in api_keys %}
                 <tr>
@@ -151,14 +90,14 @@
                     <td>{{ key.name }}</td>
                     <td>{{ key.owner }}</td>
                     <td>{{ key.permissions }}</td>
-                    <td>{{ key.created_at }}</td>
-                    <td>{{ key.last_used or 'Never' }}</td>
+                    <td><small class="text-body-tertiary">{{ key.created_at }}</small></td>
+                    <td><small class="text-body-tertiary">{{ key.last_used or 'Never' }}</small></td>
                     <td>{{ key.request_count }}</td>
                     <td>
                         {% if key.is_active %}
-                        <button onclick="revokeKey({{ key.id }})" class="btn btn-danger btn-small">Revoke</button>
+                        <button onclick="revokeKey({{ key.id }})" class="btn btn-danger btn-sm"><i class="bi bi-x-lg"></i></button>
                         {% else %}
-                        <span class="badge badge-canceled">Revoked</span>
+                        <span class="badge bg-danger bg-opacity-25 text-danger">Revoked</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -169,57 +108,45 @@
     {% else %}
     <div class="empty-state">
         <div class="empty-state-icon">🔑</div>
-        <h3>No API keys</h3>
-        <p>Create one to use the REST API</p>
+        <h6 class="text-body-secondary">No API keys</h6>
+        <p class="text-body-tertiary" style="font-size: 13px;">Create one to use the REST API</p>
     </div>
     {% endif %}
 </div>
 
-<!-- Device Mapping Tab -->
-<div id="tab-devices" class="tab-content" style="display:none;">
-    <div class="section-header">
-        <h2>📱 Device Mapping</h2>
-        <button class="btn btn-primary btn-small" onclick="document.getElementById('addDeviceForm').style.display='block'">+ Add Mapping</button>
+<!-- ═══ Devices Tab ═══ -->
+<div class="tab-pane fade" id="tab-devices">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-phone me-1"></i>Device Mapping</h6>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('addDeviceForm').classList.toggle('d-none')"><i class="bi bi-plus-lg me-1"></i>Add</button>
     </div>
+    <p class="text-body-tertiary mb-3" style="font-size: 13px;">Map CUPS usernames from AirPrint/Mopria devices to real users.</p>
 
-    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
-        Map CUPS usernames from AirPrint/Mopria devices to real users so their jobs are auto-assigned.
-    </p>
-
-    <div id="addDeviceForm" style="display:none; margin-bottom: 20px; padding: 16px; background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border-color);">
-        <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end;">
-            <div>
-                <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">CUPS Username (e.g. "iPhone")</label>
-                <input id="devCupsUser" type="text" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); font-family: inherit;">
+    <div id="addDeviceForm" class="card p-3 mb-3 d-none">
+        <div class="row g-2 align-items-end">
+            <div class="col">
+                <label class="form-label">CUPS Username (e.g. "iPhone")</label>
+                <input id="devCupsUser" type="text" class="form-control form-control-sm">
             </div>
-            <div>
-                <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Authentik Username</label>
-                <input id="devAuthUser" type="text" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); font-family: inherit;">
+            <div class="col">
+                <label class="form-label">Authentik Username</label>
+                <input id="devAuthUser" type="text" class="form-control form-control-sm">
             </div>
-            <button class="btn btn-success btn-small" onclick="addDevice()">Add</button>
+            <div class="col-auto"><button class="btn btn-success btn-sm" onclick="addDevice()"><i class="bi bi-check-lg"></i></button></div>
         </div>
     </div>
 
     {% if known_devices %}
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>CUPS Username</th>
-                    <th>→ Authentik User</th>
-                    <th>Auto-match</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>CUPS Username</th><th>→ Authentik User</th><th>Auto</th><th>Actions</th></tr></thead>
             <tbody>
                 {% for dev in known_devices %}
                 <tr>
                     <td><code>{{ dev.cups_username }}</code></td>
                     <td>{{ dev.authentik_username }}</td>
                     <td>{{ '✅' if dev.auto_match else '❌' }}</td>
-                    <td>
-                        <button onclick="deleteDevice({{ dev.id }})" class="btn btn-danger btn-small">Delete</button>
-                    </td>
+                    <td><button onclick="deleteDevice({{ dev.id }})" class="btn btn-danger btn-sm"><i class="bi bi-trash"></i></button></td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -228,55 +155,44 @@
     {% else %}
     <div class="empty-state">
         <div class="empty-state-icon">📱</div>
-        <h3>No device mappings</h3>
-        <p>When AirPrint/Mopria jobs arrive, check the CUPS username and add a mapping here</p>
+        <h6 class="text-body-secondary">No device mappings</h6>
+        <p class="text-body-tertiary" style="font-size: 13px;">AirPrint/Mopria jobs will appear as unclaimed until mapped</p>
     </div>
     {% endif %}
 </div>
 
-<!-- Email Mapping Tab -->
-<div id="tab-emails" class="tab-content" style="display:none;">
-    <div class="section-header">
-        <h2>📧 Email Mapping</h2>
-        <button class="btn btn-primary btn-small" onclick="document.getElementById('addEmailForm').style.display='block'">+ Add Mapping</button>
+<!-- ═══ Emails Tab ═══ -->
+<div class="tab-pane fade" id="tab-emails">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-envelope me-1"></i>Email Mapping</h6>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('addEmailForm').classList.toggle('d-none')"><i class="bi bi-plus-lg me-1"></i>Add</button>
     </div>
+    <p class="text-body-tertiary mb-3" style="font-size: 13px;">Map email addresses to usernames for print-via-email.</p>
 
-    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
-        Map email addresses to usernames so print-via-email jobs are properly assigned.
-    </p>
-
-    <div id="addEmailForm" style="display:none; margin-bottom: 20px; padding: 16px; background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border-color);">
-        <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end;">
-            <div>
-                <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Email Address</label>
-                <input id="mapEmail" type="email" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); font-family: inherit;">
+    <div id="addEmailForm" class="card p-3 mb-3 d-none">
+        <div class="row g-2 align-items-end">
+            <div class="col">
+                <label class="form-label">Email Address</label>
+                <input id="mapEmail" type="email" class="form-control form-control-sm">
             </div>
-            <div>
-                <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Username</label>
-                <input id="mapUser" type="text" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); font-family: inherit;">
+            <div class="col">
+                <label class="form-label">Username</label>
+                <input id="mapUser" type="text" class="form-control form-control-sm">
             </div>
-            <button class="btn btn-success btn-small" onclick="addEmail()">Add</button>
+            <div class="col-auto"><button class="btn btn-success btn-sm" onclick="addEmail()"><i class="bi bi-check-lg"></i></button></div>
         </div>
     </div>
 
     {% if email_mappings %}
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>Email Address</th>
-                    <th>→ Username</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead><tr><th>Email Address</th><th>→ Username</th><th>Actions</th></tr></thead>
             <tbody>
                 {% for em in email_mappings %}
                 <tr>
                     <td>{{ em.email }}</td>
                     <td>{{ em.username }}</td>
-                    <td>
-                        <button onclick="deleteEmail('{{ em.email }}')" class="btn btn-danger btn-small">Delete</button>
-                    </td>
+                    <td><button onclick="deleteEmail('{{ em.email }}')" class="btn btn-danger btn-sm"><i class="bi bi-trash"></i></button></td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -285,111 +201,188 @@
     {% else %}
     <div class="empty-state">
         <div class="empty-state-icon">📧</div>
-        <h3>No email mappings</h3>
-        <p>Map email addresses to usernames for the print-via-email feature</p>
+        <h6 class="text-body-secondary">No email mappings</h6>
+        <p class="text-body-tertiary" style="font-size: 13px;">Map email addresses to usernames</p>
     </div>
     {% endif %}
 </div>
 
+</div><!-- /tab-content -->
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    // Tab switching
-    function showTab(name) {
-        document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
-        document.getElementById('tab-' + name).style.display = 'block';
-        document.querySelectorAll('#adminTabs .nav-tab').forEach(el => el.classList.remove('active'));
-        event.target.classList.add('active');
+    const POLL_INTERVAL = 5000;
+    let prevAdminJobIds = new Set();
+
+    // ─── Render ──────────────────────────────────────────────
+    function badgeHtml(stateText) {
+        const map = { held: 'primary', pending: 'warning', processing: 'success', completed: 'secondary', canceled: 'danger' };
+        const cls = map[(stateText || '').toLowerCase()] || 'secondary';
+        return `<span class="badge bg-${cls} bg-opacity-25 text-${cls}">${stateText}</span>`;
     }
 
-    // Job actions
-    function releaseJob(jobId) {
-        if (!confirm('Release this job?')) return;
-        fetch(`/api/job/${jobId}/release`, { method: 'POST' })
-            .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error); });
-    }
-    function cancelJob(jobId) {
-        if (!confirm('Cancel this job?')) return;
-        fetch(`/api/job/${jobId}/cancel`, { method: 'POST' })
-            .then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.error); });
-    }
-
-    // API Key management
-    function createApiKey() {
-        document.getElementById('newKeyForm').style.display = 'block';
-        document.getElementById('newKeyResult').style.display = 'none';
+    function renderAdminRow(job, isNew) {
+        let acts = '';
+        if ([3,4].includes(job.state)) acts += `<button onclick="releaseJob(${job.id})" class="btn btn-success btn-sm"><i class="bi bi-check-lg"></i></button>`;
+        if (![7,8,9].includes(job.state)) acts += `<button onclick="cancelJob(${job.id})" class="btn btn-danger btn-sm ms-1"><i class="bi bi-x-lg"></i></button>`;
+        return `<tr class="${isNew ? 'fade-in' : ''}" data-job-id="${job.id}">
+            <td><strong>#${job.id}</strong></td>
+            <td>${job.user || 'Unknown'}</td>
+            <td class="text-truncate" style="max-width: 180px;">${job.name || 'Untitled'}</td>
+            <td>${badgeHtml(job.state_text)}</td>
+            <td>${job.pages > 0 ? job.pages : '—'}</td>
+            <td>${job.size} KB</td>
+            <td><small class="text-body-tertiary">${job.time}</small></td>
+            <td>${acts}</td>
+        </tr>`;
     }
 
-    function submitApiKey() {
+    function renderAdminCard(job, isNew) {
+        let acts = '';
+        if ([3,4].includes(job.state)) acts += `<button onclick="releaseJob(${job.id})" class="btn btn-success btn-sm"><i class="bi bi-check-lg me-1"></i>Release</button>`;
+        if (![7,8,9].includes(job.state)) acts += `<button onclick="cancelJob(${job.id})" class="btn btn-danger btn-sm"><i class="bi bi-x-lg me-1"></i>Cancel</button>`;
+        return `<div class="job-card ${isNew ? 'fade-in' : ''}" data-job-id="${job.id}">
+            <div class="job-card-header">
+                <span class="job-card-title">#${job.id} — ${job.name || 'Untitled'}</span>
+                ${badgeHtml(job.state_text)}
+            </div>
+            <div class="job-card-meta">
+                <span><i class="bi bi-person"></i> ${job.user || 'Unknown'}</span>
+                <span><i class="bi bi-file-earmark"></i> ${job.pages > 0 ? job.pages : '—'} pg</span>
+                <span><i class="bi bi-hdd"></i> ${job.size} KB</span>
+                <span><i class="bi bi-clock"></i> ${job.time}</span>
+            </div>
+            <div class="job-card-actions">${acts}</div>
+        </div>`;
+    }
+
+    // ─── Update ──────────────────────────────────────────────
+    function updateAdminJobs(jobs) {
+        const newIds = new Set(jobs.map(j => j.id));
+        document.getElementById('adminJobsCount').textContent = jobs.length;
+        const empty = document.getElementById('adminJobsEmpty');
+        if (jobs.length === 0) {
+            document.getElementById('adminJobsTableBody').innerHTML = '';
+            document.getElementById('adminJobsCards').innerHTML = '';
+            empty.style.display = 'block';
+        } else {
+            empty.style.display = 'none';
+            document.getElementById('adminJobsTableBody').innerHTML = jobs.map(j => renderAdminRow(j, !prevAdminJobIds.has(j.id))).join('');
+            document.getElementById('adminJobsCards').innerHTML = jobs.map(j => renderAdminCard(j, !prevAdminJobIds.has(j.id))).join('');
+        }
+        prevAdminJobIds = newIds;
+    }
+
+    function refreshAdminJobs() {
+        fetch('{{ url_for("web.api_jobs") }}?all=true')
+            .then(r => r.json()).then(updateAdminJobs).catch(console.error);
+    }
+
+    refreshAdminJobs();
+    setInterval(refreshAdminJobs, POLL_INTERVAL);
+
+    // ─── Job Actions ─────────────────────────────────────────
+    async function releaseJob(jobId) {
+        const ok = await confirmAction({ title: 'Release Job', message: `Release job #${jobId}?`, confirmText: 'Release', type: 'success' });
+        if (!ok) return;
+        try {
+            const r = await fetch(`/api/job/${jobId}/release`, { method: 'POST' });
+            const d = await r.json();
+            if (d.success) { Toast.success('Job released'); refreshAdminJobs(); } else Toast.error(d.error);
+        } catch (e) { Toast.error('Error: ' + e.message); }
+    }
+
+    async function cancelJob(jobId) {
+        const ok = await confirmAction({ title: 'Cancel Job', message: `Cancel job #${jobId}? This cannot be undone.`, confirmText: 'Cancel Job', type: 'danger' });
+        if (!ok) return;
+        try {
+            const r = await fetch(`/api/job/${jobId}/cancel`, { method: 'POST' });
+            const d = await r.json();
+            if (d.success) { Toast.success('Job cancelled'); refreshAdminJobs(); } else Toast.error(d.error);
+        } catch (e) { Toast.error('Error: ' + e.message); }
+    }
+
+    // ─── API Keys ────────────────────────────────────────────
+    async function submitApiKey() {
         const name = document.getElementById('keyName').value;
         const owner = document.getElementById('keyOwner').value;
         const permissions = [];
         if (document.getElementById('permRead').checked) permissions.push('read');
         if (document.getElementById('permWrite').checked) permissions.push('write');
         if (document.getElementById('permAdmin').checked) permissions.push('admin');
+        if (!name) { Toast.warning('Key name is required'); return; }
 
-        if (!name) { alert('Name is required'); return; }
-
-        fetch('/api/v1/keys', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer session' },
-            body: JSON.stringify({ name, owner, permissions })
-        })
-        .then(r => r.json())
-        .then(data => {
+        try {
+            const r = await fetch('/api/v1/keys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer session' },
+                body: JSON.stringify({ name, owner, permissions })
+            });
+            const data = await r.json();
             if (data.key) {
-                document.getElementById('newKeyForm').style.display = 'none';
-                document.getElementById('newKeyResult').style.display = 'block';
+                document.getElementById('newKeyForm').classList.add('d-none');
+                document.getElementById('newKeyResult').classList.remove('d-none');
                 document.getElementById('newKeyValue').textContent = data.key;
+                Toast.success('API key created!');
             } else {
-                alert(data.error || 'Failed to create key');
+                Toast.error(data.error || 'Failed to create key');
             }
-        });
+        } catch (e) { Toast.error('Error: ' + e.message); }
     }
 
-    function revokeKey(keyId) {
-        if (!confirm('Revoke this API key?')) return;
-        fetch(`/api/v1/keys/${keyId}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': 'Bearer session' }
-        }).then(() => location.reload());
+    async function revokeKey(keyId) {
+        const ok = await confirmAction({ title: 'Revoke Key', message: 'Revoke this API key? It will stop working immediately.', confirmText: 'Revoke', type: 'danger' });
+        if (!ok) return;
+        try {
+            await fetch(`/api/v1/keys/${keyId}`, { method: 'DELETE', headers: { 'Authorization': 'Bearer session' } });
+            Toast.success('Key revoked');
+            location.reload();
+        } catch (e) { Toast.error('Error: ' + e.message); }
     }
 
-    // Device mapping
-    function addDevice() {
+    // ─── Device Mapping ──────────────────────────────────────
+    async function addDevice() {
         const cups = document.getElementById('devCupsUser').value;
         const auth = document.getElementById('devAuthUser').value;
-        if (!cups || !auth) { alert('Both fields required'); return; }
-        fetch('/api/v1/devices', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cups_username: cups, authentik_username: auth })
-        }).then(() => location.reload());
+        if (!cups || !auth) { Toast.warning('Both fields are required'); return; }
+        try {
+            await fetch('/api/v1/devices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cups_username: cups, authentik_username: auth }) });
+            Toast.success('Device mapping added');
+            location.reload();
+        } catch (e) { Toast.error('Error: ' + e.message); }
     }
 
-    function deleteDevice(id) {
-        if (!confirm('Delete this mapping?')) return;
-        fetch(`/api/v1/devices/${id}`, { method: 'DELETE' })
-            .then(() => location.reload());
+    async function deleteDevice(id) {
+        const ok = await confirmAction({ title: 'Delete Mapping', message: 'Delete this device mapping?', confirmText: 'Delete', type: 'danger' });
+        if (!ok) return;
+        try {
+            await fetch(`/api/v1/devices/${id}`, { method: 'DELETE' });
+            Toast.success('Mapping deleted');
+            location.reload();
+        } catch (e) { Toast.error('Error: ' + e.message); }
     }
 
-    // Email mapping
-    function addEmail() {
+    // ─── Email Mapping ───────────────────────────────────────
+    async function addEmail() {
         const email = document.getElementById('mapEmail').value;
         const user = document.getElementById('mapUser').value;
-        if (!email || !user) { alert('Both fields required'); return; }
-        fetch('/api/v1/emails', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, username: user })
-        }).then(() => location.reload());
+        if (!email || !user) { Toast.warning('Both fields are required'); return; }
+        try {
+            await fetch('/api/v1/emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, username: user }) });
+            Toast.success('Email mapping added');
+            location.reload();
+        } catch (e) { Toast.error('Error: ' + e.message); }
     }
 
-    function deleteEmail(email) {
-        if (!confirm('Delete this mapping?')) return;
-        fetch(`/api/v1/emails/${encodeURIComponent(email)}`, { method: 'DELETE' })
-            .then(() => location.reload());
+    async function deleteEmail(email) {
+        const ok = await confirmAction({ title: 'Delete Mapping', message: `Delete mapping for ${email}?`, confirmText: 'Delete', type: 'danger' });
+        if (!ok) return;
+        try {
+            await fetch(`/api/v1/emails/${encodeURIComponent(email)}`, { method: 'DELETE' });
+            Toast.success('Mapping deleted');
+            location.reload();
+        } catch (e) { Toast.error('Error: ' + e.message); }
     }
 </script>
 {% endblock %}

@@ -183,6 +183,30 @@ def api_jobs():
     return jsonify(jobs)
 
 
+@web_bp.route('/api/jobs/unclaimed')
+@login_required
+def api_unclaimed_jobs():
+    db = current_app.config['db']
+    username = session['user']['username']
+    all_jobs = get_all_jobs(db=db)
+    unclaimed_job_ids = db.get_unclaimed_jobs()
+
+    unclaimed_jobs = []
+    for job in all_jobs:
+        cups_user = job['user']
+        mapped_user = db.get_device_mapping(cups_user)
+        if mapped_user == username:
+            continue
+        if job['id'] in unclaimed_job_ids:
+            unclaimed_jobs.append(job)
+        elif not mapped_user and cups_user != username:
+            meta = db.get_job_meta(job['id'])
+            if not meta:
+                db.create_job_meta(job['id'], submitted_via='ipp', submitted_by=cups_user)
+                unclaimed_jobs.append(job)
+    return jsonify(unclaimed_jobs)
+
+
 @web_bp.route('/api/job/<int:job_id>/release', methods=['POST'])
 @login_required
 def api_release_job(job_id):
