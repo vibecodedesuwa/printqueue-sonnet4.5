@@ -81,6 +81,9 @@ def authorize():
                 'name': user_info.get('name', user_info.get('preferred_username', 'User')),
                 'groups': user_info.get('groups', [])
             }
+            # Store id_token for RP-Initiated Logout
+            if token_data.get('id_token'):
+                session['id_token'] = token_data['id_token']
             flash(f"Welcome, {session['user']['name']}!", 'success')
             return redirect(url_for('web.dashboard'))
         else:
@@ -97,7 +100,29 @@ def authorize():
 
 @web_bp.route('/logout')
 def logout():
+    """OIDC RP-Initiated Logout: clears local session then redirects to Authentik to end SSO session."""
+    id_token = session.pop('id_token', None)
     session.pop('user', None)
+    session.clear()
+
+    # Try to redirect to Authentik's end_session_endpoint for full SSO logout
+    try:
+        authentik = current_app.config['authentik']
+        metadata = authentik.load_server_metadata()
+        end_session_url = metadata.get('end_session_endpoint')
+
+        if end_session_url:
+            from urllib.parse import urlencode
+            params = {
+                'post_logout_redirect_uri': url_for('web.login', _external=True),
+            }
+            if id_token:
+                params['id_token_hint'] = id_token
+            return redirect(f"{end_session_url}?{urlencode(params)}")
+    except Exception as e:
+        print(f"[LOGOUT] Could not redirect to Authentik logout: {e}")
+
+    # Fallback: just redirect to login
     flash('You have been logged out', 'info')
     return redirect(url_for('web.login'))
 
