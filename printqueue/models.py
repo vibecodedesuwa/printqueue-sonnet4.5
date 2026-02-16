@@ -216,8 +216,7 @@ class Database:
         """Get list of unclaimed job IDs."""
         with self.get_connection() as conn:
             rows = conn.execute(
-                'SELECT cups_job_id FROM print_job_meta WHERE claimed_by IS NULL AND submitted_via = ?',
-                ('ipp',)
+                'SELECT cups_job_id FROM print_job_meta WHERE claimed_by IS NULL AND submitted_by IS NULL'
             ).fetchall()
             return [r['cups_job_id'] for r in rows]
 
