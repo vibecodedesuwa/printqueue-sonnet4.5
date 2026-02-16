@@ -56,6 +56,9 @@ def get_user_jobs(username=None, db=None):
             except Exception:
                 pass
 
+            # Debug: print key CUPS attributes for every job
+            print(f"[CUPS DEBUG] Job #{job_id}: user='{job_info.get('job-originating-user-name', 'MISSING')}', name='{job_info.get('job-name', 'MISSING')}', state={job_info.get('job-state', 'MISSING')}")
+
             # Get real username from app database if available
             display_user = job_info.get('job-originating-user-name', 'Unknown')
             submitted_via = 'ipp'
