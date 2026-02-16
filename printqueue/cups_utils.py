@@ -52,9 +52,13 @@ def get_user_jobs(username=None, db=None):
             # Enrich with full attributes (getJobs may return limited data)
             try:
                 full_attrs = conn.getJobAttributes(job_id)
+                # Debug: dump raw keys from both sources
+                print(f"[CUPS DEBUG] Job #{job_id} getJobs keys: {list(job_info.keys())}")
+                print(f"[CUPS DEBUG] Job #{job_id} getJobAttributes keys: {list(full_attrs.keys())}")
+                print(f"[CUPS DEBUG] Job #{job_id} getJobAttributes user field: {full_attrs.get('job-originating-user-name', 'NOT IN ATTRS')}")
                 job_info.update(full_attrs)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[CUPS DEBUG] Job #{job_id} getJobAttributes FAILED: {e}")
 
             # Debug: print key CUPS attributes for every job
             print(f"[CUPS DEBUG] Job #{job_id}: user='{job_info.get('job-originating-user-name', 'MISSING')}', name='{job_info.get('job-name', 'MISSING')}', state={job_info.get('job-state', 'MISSING')}")
