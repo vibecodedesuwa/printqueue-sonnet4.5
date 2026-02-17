@@ -151,6 +151,37 @@ def get_all_jobs(db=None):
     return get_user_jobs(username=None, db=db)
 
 
+def _get_job_owner(conn, job_id, jobs_dict):
+    """Get the originating username for a CUPS job, with lpstat fallback."""
+    # Try pycups first
+    try:
+        attrs = conn.getJobAttributes(job_id)
+        owner = attrs.get('job-originating-user-name', '')
+        if owner:
+            return owner
+    except Exception:
+        pass
+
+    owner = jobs_dict.get(job_id, {}).get('job-originating-user-name', '')
+    if owner:
+        return owner
+
+    # Fallback: parse lpstat output (same as get_user_jobs)
+    try:
+        import subprocess
+        result = subprocess.run(['lpstat', '-o', '-l'], capture_output=True, text=True, timeout=5)
+        for line in result.stdout.split('\n'):
+            if f'-{job_id} ' in line and not line.startswith(' '):
+                parts = line.split()
+                if len(parts) >= 2:
+                    print(f"[RELEASE DEBUG] lpstat matched job #{job_id}: user={parts[1]}")
+                    return parts[1]
+    except Exception as e:
+        print(f"[RELEASE DEBUG] lpstat fallback failed: {e}")
+
+    return ''
+
+
 def release_job(job_id, username=None, is_admin=False):
     """Release a held job to start printing"""
     try:
@@ -161,20 +192,15 @@ def release_job(job_id, username=None, is_admin=False):
             return False, 'Job not found', 404
 
         if username and not is_admin:
-            # Get full attributes for reliable user check
-            try:
-                attrs = conn.getJobAttributes(job_id)
-            except Exception:
-                attrs = jobs[job_id]
+            job_user = _get_job_owner(conn, job_id, jobs)
+            print(f"[RELEASE DEBUG] job #{job_id}: job_user='{job_user}', requesting_user='{username}'")
 
-            job_user = attrs.get('job-originating-user-name', '')
-
-            # Allow if: exact match, or job is owned by this user via device mapping
             if job_user != username:
-                # Check if this CUPS user is mapped to the requesting user
+                # Check device mapping
                 from flask import current_app
                 db = current_app.config.get('db')
                 mapped_user = db.get_device_mapping(job_user) if db else None
+                print(f"[RELEASE DEBUG] device mapping: '{job_user}' -> '{mapped_user}'")
                 if mapped_user != username:
                     return False, 'Permission denied', 403
 
@@ -194,15 +220,9 @@ def cancel_job(job_id, username=None, is_admin=False):
             return False, 'Job not found', 404
 
         if username and not is_admin:
-            # Get full attributes for reliable user check
-            try:
-                attrs = conn.getJobAttributes(job_id)
-            except Exception:
-                attrs = jobs[job_id]
+            job_user = _get_job_owner(conn, job_id, jobs)
+            print(f"[CANCEL DEBUG] job #{job_id}: job_user='{job_user}', requesting_user='{username}'")
 
-            job_user = attrs.get('job-originating-user-name', '')
-
-            # Allow if: exact match, or job is owned by this user via device mapping
             if job_user != username:
                 from flask import current_app
                 db = current_app.config.get('db')
