@@ -348,9 +348,6 @@ PRINTER_NAME=HP_Smart_Tank_515
 ADMIN_GROUPS=admins,print-admins
 ADMIN_USERS=admin,yourusername
 
-# Kiosk Mode
-KIOSK_PIN=1234
-
 # Email Print (set MAIL_ENABLED=true to activate)
 MAIL_ENABLED=false
 MAIL_IMAP_HOST=imap.your-domain.com
@@ -584,9 +581,10 @@ If email printing is enabled:
 
 ### 9.4 Test Kiosk Mode
 
-1. Open `http://<lxc-ip>:5000/kiosk` on a phone/tablet
-2. Enter the PIN (default: `1234`, set via `KIOSK_PIN` env var)
-3. Use the Kiosk to approve/deny jobs with big touch buttons
+1. Go to **Admin Panel** → **Kiosks** tab → click **Register New**
+2. Enter a device name and click **Create** → copy the registration URL
+3. Open the registration URL on the kiosk device's browser (phone/tablet)
+4. The device is now authorized — use the kiosk to approve/deny jobs with big touch buttons
 
 ---
 
@@ -827,7 +825,7 @@ Your print queue management system is now ready! Users can:
 | URL                             | Purpose                        |
 | ------------------------------- | ------------------------------ |
 | `http://<lxc-ip>:5000`          | Dashboard (SSO login)          |
-| `http://<lxc-ip>:5000/kiosk`    | Kiosk Mode (PIN: `1234`)       |
+| `http://<lxc-ip>:5000/kiosk`    | Kiosk Mode (device token auth) |
 | `http://<lxc-ip>:5000/upload`   | Upload & Print                 |
 | `http://<lxc-ip>:5000/api/docs` | API Documentation (Swagger UI) |
 | `http://<lxc-ip>:631`           | CUPS Web Interface             |

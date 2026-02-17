@@ -1,21 +1,21 @@
 # 🖨️ PrintQ — Print Queue Manager
 
-A modern, feature-rich print queue management system built with Flask. Supports Kiosk Mode, Web Upload, Email Print, REST API, AirPrint/Mopria, and a "Claim Your Job" system for mobile devices.
+A modern, feature-rich print queue management system built with Flask and Bootstrap 5. Supports Kiosk Mode with device token authentication, Web Upload, Email Print, REST API, AirPrint/Mopria, and a "Claim Your Job" system for mobile devices.
 
 ## ✨ Features
 
-| Feature               | Description                                                                      |
-| --------------------- | -------------------------------------------------------------------------------- |
-| **Kiosk Mode**        | Touch-optimized fullscreen UI for approving/denying jobs on a phone/tablet       |
-| **Web Upload**        | Drag-and-drop file upload with print options (copies, duplex, color, page range) |
-| **Email Print**       | Send attachments via email to print — auto-submitted to queue                    |
-| **REST API v1**       | 20+ endpoints with API key authentication, rate limiting, Swagger docs           |
-| **AirPrint / Mopria** | Native iOS/Android/macOS/Windows printing via CUPS + Avahi mDNS                  |
-| **Claim Your Job**    | Unclaimed job pool for AirPrint/Mopria users — claim via web dashboard           |
-| **PWA**               | Add to home screen, offline caching, responsive mobile-first design              |
-| **Authentik SSO**     | OpenID Connect authentication via Authentik                                      |
-| **Hold & Release**    | All jobs are held until approved via dashboard, kiosk, or API                    |
-| **Admin Panel**       | Manage all jobs, API keys, device mappings, email mappings                       |
+| Feature               | Description                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| **Kiosk Mode**        | Touch-optimized fullscreen UI for approving/denying jobs — secured with device tokens |
+| **Web Upload**        | Drag-and-drop file upload with print options (copies, duplex, color, page range)      |
+| **Email Print**       | Send attachments via email to print — auto-submitted to queue                         |
+| **REST API v1**       | 20+ endpoints with API key authentication, rate limiting, Swagger docs                |
+| **AirPrint / Mopria** | Native iOS/Android/macOS/Windows printing via CUPS + Avahi mDNS                       |
+| **Claim Your Job**    | Unclaimed job pool for AirPrint/Mopria users — claim via web dashboard                |
+| **PWA**               | Add to home screen, offline caching, responsive mobile-first design                   |
+| **Authentik SSO**     | OpenID Connect authentication with RP-Initiated Logout                                |
+| **Hold & Release**    | All jobs are held until approved via dashboard, kiosk, or API                         |
+| **Admin Panel**       | Manage jobs, API keys, device mappings, email mappings, and kiosk devices             |
 
 ## 🏗️ Architecture
 
@@ -25,8 +25,8 @@ printqueue-sonnet4.5/
 ├── printqueue/                # Flask application package
 │   ├── __init__.py            # App factory
 │   ├── config.py              # Environment config
-│   ├── models.py              # SQLite models (API keys, jobs, mappings)
-│   ├── auth.py                # Auth decorators (session, API key, kiosk)
+│   ├── models.py              # SQLite models (API keys, jobs, devices, mappings)
+│   ├── auth.py                # Auth decorators (session, API key, kiosk token)
 │   ├── cups_utils.py          # CUPS integration helpers
 │   ├── routes/
 │   │   ├── web.py             # Dashboard, admin, kiosk, login routes
@@ -37,18 +37,17 @@ printqueue-sonnet4.5/
 │   │   └── mail_printer.py    # IMAP email polling service
 │   └── swagger/
 │       └── api_v1.yml         # OpenAPI 3.0 specification
-├── templates/                 # Jinja2 templates
-│   ├── base.html              # Base layout (dark theme, responsive)
-│   ├── dashboard.html         # User dashboard (with claim system)
-│   ├── admin.html             # Admin panel (jobs, keys, mappings)
-│   ├── kiosk.html             # Kiosk approval screen
-│   ├── kiosk_login.html       # Kiosk PIN entry
+├── templates/                 # Jinja2 templates (Bootstrap 5)
+│   ├── base.html              # Base layout (dark theme, toasts, modals)
+│   ├── dashboard.html         # User dashboard (AJAX polling, claim system)
+│   ├── admin.html             # Admin panel (jobs, keys, devices, kiosks)
+│   ├── kiosk.html             # Kiosk dashboard (device token auth)
+│   ├── kiosk_unauthorized.html # Shown when device not registered
 │   ├── upload.html            # Drag-and-drop upload
-│   └── api_docs.html          # Swagger UI
+│   └── api_docs.html          # Swagger UI (dark theme)
 ├── static/
 │   ├── manifest.json          # PWA manifest
-│   ├── sw.js                  # Service worker
-│   └── icons/                 # PWA icons
+│   └── sw.js                  # Service worker
 ├── config/
 │   └── avahi/                 # AirPrint mDNS service files
 ├── scripts/
@@ -58,7 +57,9 @@ printqueue-sonnet4.5/
 ├── Dockerfile
 ├── requirements.txt
 ├── .env.example
-├── CLIENT_PRINT_GUIDE.md      # Multi-platform setup guide
+├── CLIENT_PRINT_GUIDE.md      # Multi-platform print setup
+├── CLIENT_SETUP_GUIDE.md      # Network/client configuration
+├── LXC_SETUP_GUIDE.md         # Proxmox LXC deployment
 └── README.md
 ```
 
@@ -81,13 +82,13 @@ docker-compose up -d --build
 
 ### 3. Access
 
-| URL                              | Purpose                     |
-| -------------------------------- | --------------------------- |
-| `http://localhost:5000`          | Web Dashboard (SSO login)   |
-| `http://localhost:5000/kiosk`    | Kiosk Mode (PIN: `1234`)    |
-| `http://localhost:5000/upload`   | Upload & Print              |
-| `http://localhost:5000/api/docs` | API Documentation (Swagger) |
-| `http://localhost:631`           | CUPS Admin                  |
+| URL                              | Purpose                        |
+| -------------------------------- | ------------------------------ |
+| `http://localhost:5000`          | Web Dashboard (SSO login)      |
+| `http://localhost:5000/kiosk`    | Kiosk Mode (device token auth) |
+| `http://localhost:5000/upload`   | Upload & Print                 |
+| `http://localhost:5000/api/docs` | API Documentation (Swagger)    |
+| `http://localhost:631`           | CUPS Admin                     |
 
 ### 4. Enable AirPrint (optional)
 
@@ -106,6 +107,33 @@ See **[CLIENT_PRINT_GUIDE.md](CLIENT_PRINT_GUIDE.md)** for step-by-step instruct
 - 🐧 Linux (CUPS client)
 - 🌐 Web Upload (any browser)
 - 📧 Email Print
+
+## 🔐 Authentication
+
+| Context       | Method                                               |
+| ------------- | ---------------------------------------------------- |
+| Web Dashboard | Authentik SSO (OpenID Connect + RP-Initiated Logout) |
+| Kiosk Mode    | Device token cookie (managed via Admin → Kiosks)     |
+| REST API      | API key (`Authorization: Bearer <key>`)              |
+| Email Print   | Sender email mapped to username                      |
+
+### Kiosk Device Registration
+
+Kiosk mode uses **device token authentication** instead of a shared PIN. This ties access to specific devices via a secure, long-lived cookie.
+
+1. **Admin** → go to **Admin Panel → Kiosks** tab → click **Register New**
+2. Enter a **device name** (e.g. "Front Desk iPad") and optionally lock to an **IP address**
+3. Copy the generated **one-time registration URL**
+4. Open that URL on the **kiosk device's browser** — a secure cookie is set automatically
+5. The device can now access `/kiosk` indefinitely — no PIN, no login required
+6. To **revoke access**: delete the device from Admin → Kiosks tab (instant lockout)
+
+**Security model:**
+
+- Cookie is `httponly`, `samesite=Lax`, `secure` (when HTTPS)
+- Token is hashed with SHA-256 in the database (raw token never stored)
+- Optional IP lock per device for network-level restriction
+- Revoking a device = immediate access loss
 
 ## 🔑 REST API
 
@@ -157,15 +185,6 @@ curl -X POST -H "Authorization: Bearer pq_your_key" \
 
 Full interactive docs: **`/api/docs`** (Swagger UI)
 
-## 🔐 Authentication
-
-| Context       | Method                                  |
-| ------------- | --------------------------------------- |
-| Web Dashboard | Authentik SSO (OpenID Connect)          |
-| Kiosk Mode    | 4-digit PIN (`KIOSK_PIN` env var)       |
-| REST API      | API key (`Authorization: Bearer <key>`) |
-| Email Print   | Sender email mapped to username         |
-
 ## 🙋 Claim Your Job System
 
 When printing via AirPrint/Mopria, the system may not identify you. The claim flow:
@@ -174,9 +193,9 @@ When printing via AirPrint/Mopria, the system may not identify you. The claim fl
 2. 🔍 PrintQ checks the **device mapping** table — if your device is mapped, the job is auto-assigned
 3. ❓ If unmapped, the job enters the **unclaimed pool**
 4. 🙋 You log into the dashboard and click **"Claim"** on your job
-5. ✅ The job is now yours to approve
+5. ✅ The job is now yours to approve/release
 
-**Admin tip:** Add recurring devices in **Admin → Device Mapping** so future jobs auto-assign.
+**Admin tip:** Add recurring devices in **Admin → Devices** so future jobs auto-assign.
 
 ## ⚙️ Environment Variables
 
@@ -187,14 +206,15 @@ When printing via AirPrint/Mopria, the system may not identify you. The claim fl
 | `AUTHENTIK_CLIENT_SECRET` |                       | OAuth client secret                     |
 | `AUTHENTIK_METADATA_URL`  |                       | OIDC metadata URL                       |
 | `PRINTER_NAME`            | `HP_Smart_Tank_515`   | Default CUPS printer                    |
-| `ADMIN_GROUPS`            | `admins,print-admins` | Admin group names                       |
-| `ADMIN_USERS`             | `admin`               | Admin usernames                         |
-| `KIOSK_PIN`               | `1234`                | Kiosk access PIN                        |
+| `ADMIN_GROUPS`            | `admins,print-admins` | Admin group names (comma-separated)     |
+| `ADMIN_USERS`             | `admin`               | Admin usernames (comma-separated)       |
 | `MAIL_ENABLED`            | `false`               | Enable email printing                   |
 | `MAIL_IMAP_HOST`          |                       | IMAP server host                        |
 | `MAIL_IMAP_USER`          |                       | IMAP username                           |
 | `MAIL_IMAP_PASS`          |                       | IMAP password                           |
 | `UNCLAIMED_JOB_TIMEOUT`   | `24`                  | Hours before unclaimed jobs auto-cancel |
+
+> **Note:** Kiosk access is no longer configured via environment variables. Kiosk devices are managed through the Admin Panel → Kiosks tab.
 
 ## 📄 License
 

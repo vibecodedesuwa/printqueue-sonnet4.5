@@ -18,7 +18,6 @@ services:
       - PRINTER_NAME=${PRINTER_NAME:-HP_Smart_Tank_515}
       - ADMIN_GROUPS=${ADMIN_GROUPS:-admins,print-admins}
       - ADMIN_USERS=${ADMIN_USERS:-admin}
-      - KIOSK_PIN=${KIOSK_PIN:-1234}
       - DATABASE_PATH=data/printqueue.db
       - UPLOAD_FOLDER=data/uploads
       # Email Print (optional)

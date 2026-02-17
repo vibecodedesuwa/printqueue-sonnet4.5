@@ -1,34 +1,70 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>API Documentation — PrintQ</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
     <style>
-        body { background: #0f0f1a; }
-        .swagger-ui .topbar { display: none; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0a14;
+            color: #e8e8f0;
+        }
+        /* Dark theme overrides for Swagger UI */
         .swagger-ui { color: #e8e8f0; }
+        .swagger-ui .topbar { display: none; }
         .swagger-ui .info .title { color: #e8e8f0; }
-        .swagger-ui .scheme-container { background: #1a1a2e; box-shadow: none; }
-        .swagger-ui .opblock-tag { color: #e8e8f0; border-color: rgba(108, 99, 255, 0.2); }
+        .swagger-ui .info p, .swagger-ui .info li { color: #b0b0c0; }
+        .swagger-ui .scheme-container { background: #16213e; box-shadow: none; border-radius: 12px; padding: 16px; }
+        .swagger-ui .opblock-tag { color: #e8e8f0; border-color: rgba(124, 111, 255, 0.2); }
+        .swagger-ui .opblock { border-radius: 10px; border-color: rgba(124, 111, 255, 0.15); }
+        .swagger-ui .opblock .opblock-summary { border-radius: 10px; }
         .swagger-ui .btn { border-radius: 8px; }
-        .back-link {
-            display: inline-block; padding: 12px 20px; margin: 16px;
-            color: #6c63ff; text-decoration: none; font-family: 'Inter', sans-serif;
-            font-size: 14px; font-weight: 500;
+        .swagger-ui .model-box { background: #16213e; }
+        .swagger-ui section.models { border-color: rgba(124,111,255,0.15); }
+        .swagger-ui .model-title { color: #e8e8f0; }
+        .swagger-ui table thead tr th { color: #b0b0c0; }
+        .swagger-ui .response-col_status { color: #e8e8f0; }
+        .swagger-ui .parameter__name { color: #e8e8f0; }
+        .swagger-ui .opblock-description-wrapper p { color: #b0b0c0; }
+
+        .api-header {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border-bottom: 1px solid rgba(124, 111, 255, 0.15);
+            padding: 16px 24px;
+        }
+        .api-header h1 {
+            font-size: 20px; font-weight: 800;
+            background: linear-gradient(135deg, #7c6fff, #e94560);
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
         }
     </style>
 </head>
 <body>
-    <a href="/" class="back-link">← Back to Dashboard</a>
-    <div id="swagger-ui"></div>
+    <div class="api-header d-flex justify-content-between align-items-center">
+        <h1 class="mb-0">📡 PrintQ API Documentation</h1>
+        <a href="/" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Dashboard</a>
+    </div>
+
+    <div class="container-fluid px-4 py-3">
+        <div id="swagger-ui"></div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
     <script>
         SwaggerUIBundle({
             url: '/api/v1/openapi.json',
             dom_id: '#swagger-ui',
             deepLinking: true,
+            presets: [
+                SwaggerUIBundle.presets.apis,
+                SwaggerUIStandalonePreset
+            ],
             layout: 'StandaloneLayout',
             defaultModelsExpandDepth: 1,
             docExpansion: 'list',
