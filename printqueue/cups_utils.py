@@ -161,9 +161,22 @@ def release_job(job_id, username=None, is_admin=False):
             return False, 'Job not found', 404
 
         if username and not is_admin:
-            job_user = jobs[job_id].get('job-originating-user-name')
+            # Get full attributes for reliable user check
+            try:
+                attrs = conn.getJobAttributes(job_id)
+            except Exception:
+                attrs = jobs[job_id]
+
+            job_user = attrs.get('job-originating-user-name', '')
+
+            # Allow if: exact match, or job is owned by this user via device mapping
             if job_user != username:
-                return False, 'Permission denied', 403
+                # Check if this CUPS user is mapped to the requesting user
+                from flask import current_app
+                db = current_app.config.get('db')
+                mapped_user = db.get_device_mapping(job_user) if db else None
+                if mapped_user != username:
+                    return False, 'Permission denied', 403
 
         conn.setJobHoldUntil(job_id, 'no-hold')
         return True, 'Job released', 200
@@ -181,9 +194,21 @@ def cancel_job(job_id, username=None, is_admin=False):
             return False, 'Job not found', 404
 
         if username and not is_admin:
-            job_user = jobs[job_id].get('job-originating-user-name')
+            # Get full attributes for reliable user check
+            try:
+                attrs = conn.getJobAttributes(job_id)
+            except Exception:
+                attrs = jobs[job_id]
+
+            job_user = attrs.get('job-originating-user-name', '')
+
+            # Allow if: exact match, or job is owned by this user via device mapping
             if job_user != username:
-                return False, 'Permission denied', 403
+                from flask import current_app
+                db = current_app.config.get('db')
+                mapped_user = db.get_device_mapping(job_user) if db else None
+                if mapped_user != username:
+                    return False, 'Permission denied', 403
 
         conn.cancelJob(job_id)
         return True, 'Job canceled', 200
