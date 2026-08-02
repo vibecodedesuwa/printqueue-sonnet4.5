@@ -1,19 +1,25 @@
-# Print Queue Manager - LXC Setup Guide
+# Print Queue Manager - Bare-Metal (Debian) & LXC Setup Guide
 
-Complete guide to install and configure PrintQ with all features (Kiosk, API, Email Print, AirPrint/Mopria, Claim System) on Proxmox LXC.
+Complete guide to install and configure PrintQ with all features (Kiosk, API, Email Print, AirPrint/Mopria, Claim System) running directly on a Debian/Ubuntu host (Bare-Metal) or Proxmox LXC.
 
 ## 📋 Prerequisites
 
-- Proxmox server with LXC support
+- A Bare-Metal Debian/Ubuntu Server OR a Proxmox server with LXC support
 - Authentik instance running and accessible
 - HP Smart Tank 515 printer (or similar consumer printer)
-- Your printer connected via USB or network to the LXC container
+- Your printer connected via USB or network to the host/container
 
 ---
 
-## 🚀 Part 1: Create and Configure LXC Container
+## 🚀 Part 1: Environment Preparation
 
-### 1.1 Create LXC Container in Proxmox
+### Option A: Bare-Metal (Debian/Ubuntu)
+If you are running on a dedicated physical machine or VM (Bare-Metal), you can **skip this part entirely** and proceed directly to **Part 2**.
+
+### Option B: Proxmox LXC Container
+If you are using an LXC container, follow these steps to create and configure it:
+
+#### 1.1 Create LXC Container in Proxmox
 
 ```bash
 # In Proxmox web interface:

@@ -1,8 +1,8 @@
-version: "3.8"
-
 services:
   print-queue-manager:
-    build: .
+    build:
+      context: .
+      network: host
     container_name: print-queue-manager
     restart: unless-stopped
     ports:
@@ -44,13 +44,10 @@ services:
       - LDAP_USER_SEARCH_FILTER=${LDAP_USER_SEARCH_FILTER:-(&(objectClass=user)(sAMAccountName={username}))}
       # Claim system
       - UNCLAIMED_JOB_TIMEOUT=${UNCLAIMED_JOB_TIMEOUT:-24}
-    depends_on:
-      - cups
-    networks:
-      - print-network
+    network_mode: host
 
   cups:
-    image: olbat/cupsd:latest
+    image: olbat/cupsd:stable-2026-07-06
     container_name: cups-server
     restart: unless-stopped
     ports:
@@ -62,14 +59,11 @@ services:
       - ./config/avahi:/etc/avahi/services # AirPrint service files
     environment:
       - CUPSADMIN=admin
-      - CUPSPASSWORD=changeme
-    networks:
-      - print-network
-    privileged: true
+      - CUPSPASSWORD=admin
+    network_mode: host
 
 volumes:
-  cups-data:
-
-networks:
   print-network:
     driver: bridge
+  cups-data:
+    driver: local

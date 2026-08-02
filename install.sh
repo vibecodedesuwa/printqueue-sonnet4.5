@@ -32,7 +32,11 @@ apt install -y \
     gcc \
     git \
     curl \
-    nano
+    nano \
+    avahi-daemon \
+    avahi-utils \
+    libreoffice-writer \
+    libmagic1
 
 echo "✅ System dependencies installed"
 echo ""
