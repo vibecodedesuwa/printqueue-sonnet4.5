@@ -31,6 +31,17 @@ services:
       - MAIL_SMTP_PORT=${MAIL_SMTP_PORT:-587}
       - MAIL_SMTP_USER=${MAIL_SMTP_USER:-}
       - MAIL_SMTP_PASS=${MAIL_SMTP_PASS:-}
+      # Active Directory (LDAP)
+      - LDAP_ENABLED=${LDAP_ENABLED:-false}
+      - LDAP_SHOW_IN_WEBUI=${LDAP_SHOW_IN_WEBUI:-true}
+      - LDAP_HOST=${LDAP_HOST:-}
+      - LDAP_PORT=${LDAP_PORT:-389}
+      - LDAP_USE_SSL=${LDAP_USE_SSL:-false}
+      - LDAP_BASE_DN=${LDAP_BASE_DN:-}
+      - LDAP_BIND_DN=${LDAP_BIND_DN:-}
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD:-}
+      - LDAP_DOMAIN=${LDAP_DOMAIN:-}
+      - LDAP_USER_SEARCH_FILTER=${LDAP_USER_SEARCH_FILTER:-(&(objectClass=user)(sAMAccountName={username}))}
       # Claim system
       - UNCLAIMED_JOB_TIMEOUT=${UNCLAIMED_JOB_TIMEOUT:-24}
     depends_on:

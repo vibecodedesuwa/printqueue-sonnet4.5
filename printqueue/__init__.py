@@ -62,6 +62,29 @@ def create_app(config_class=Config):
     app.config['oauth'] = oauth
     app.config['authentik'] = authentik
 
+    # Initialize Active Directory / LDAP Auth
+    from .auth_ad import ActiveDirectoryAuth
+    ad_config = {
+        'LDAP_ENABLED': config_class.LDAP_ENABLED,
+        'LDAP_HOST': config_class.LDAP_HOST,
+        'LDAP_PORT': config_class.LDAP_PORT,
+        'LDAP_USE_SSL': config_class.LDAP_USE_SSL,
+        'LDAP_BASE_DN': config_class.LDAP_BASE_DN,
+        'LDAP_BIND_DN': config_class.LDAP_BIND_DN,
+        'LDAP_BIND_PASSWORD': config_class.LDAP_BIND_PASSWORD,
+        'LDAP_DOMAIN': config_class.LDAP_DOMAIN,
+        'LDAP_USER_SEARCH_FILTER': config_class.LDAP_USER_SEARCH_FILTER
+    }
+    app.config['ad_auth'] = ActiveDirectoryAuth(ad_config)
+
+    # Context processor to expose ldap_enabled state to all templates
+    @app.context_processor
+    def inject_globals():
+        ad_auth = app.config.get('ad_auth')
+        ad_configured = ad_auth.is_configured() if ad_auth else False
+        show_ad = config_class.LDAP_ENABLED and config_class.LDAP_SHOW_IN_WEBUI and ad_configured
+        return dict(ldap_enabled=show_ad)
+
     # Ensure upload directory exists
     import os
     os.makedirs(config_class.UPLOAD_FOLDER, exist_ok=True)

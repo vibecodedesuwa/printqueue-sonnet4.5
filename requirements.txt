@@ -9,3 +9,4 @@ imapclient
 pyyaml
 python-magic
 werkzeug>=3.0
+ldap3>=2.9

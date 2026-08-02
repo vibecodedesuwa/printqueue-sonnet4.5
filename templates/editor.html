@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}A4 Quick Editor — PrintQ{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* A4 Paper Canvas Container */
+    .a4-container {
+        display: flex;
+        justify-content: center;
+        padding: 20px 0;
+        background: rgba(10, 10, 20, 0.4);
+        border-radius: 12px;
+        overflow-x: auto;
+    }
+
+    .a4-paper {
+        width: 210mm;
+        min-height: 297mm;
+        padding: 20mm;
+        background: #ffffff;
+        color: #111111;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        border-radius: 4px;
+        box-sizing: border-box;
+        font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .a4-paper [contenteditable="true"]:focus {
+        outline: 2px dashed #7c6fff;
+        border-radius: 4px;
+    }
+
+    .editor-toolbar {
+        background: rgba(18, 18, 31, 0.9);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(124, 111, 255, 0.2);
+        border-radius: 12px;
+        padding: 12px 16px;
+    }
+
+    @media (max-width: 768px) {
+        .a4-paper {
+            width: 100% !important;
+            min-height: 160mm;
+            padding: 15px !important;
+            font-size: 14px !important;
+        }
+        .editor-toolbar {
+            padding: 8px !important;
+            gap: 6px !important;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .a4-paper {
+            padding: 12px !important;
+            font-size: 13px !important;
+        }
+        .btn-group-sm > .btn {
+            padding: 4px 8px !important;
+            font-size: 12px !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+    <div>
+        <h4 class="fw-bold mb-1 d-flex align-items-center gap-2">
+            <i class="bi bi-file-earmark-text text-info"></i>
+            <span data-i18n="editor_title">Quick A4 Document Editor</span>
+        </h4>
+        <p class="text-secondary small mb-0" data-i18n="editor_subtitle">Create, format, paste images, and print A4 documents directly</p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="clearEditor()"><i class="bi bi-trash me-1"></i><span data-i18n="editor_clear">Clear</span></button>
+        <button type="button" class="btn btn-success btn-lg px-4 d-flex align-items-center gap-2 shadow" id="printA4Btn" onclick="submitA4Print()">
+            <i class="bi bi-printer-fill fs-5"></i>
+            <span data-i18n="editor_print_now">Print A4 Document</span>
+        </button>
+    </div>
+</div>
+
+<!-- Editor Toolbar -->
+<div class="editor-toolbar mb-4 d-flex flex-wrap align-items-center gap-2">
+    <div class="btn-group btn-group-sm">
+        <button type="button" class="btn btn-outline-secondary" onclick="execCmd('bold')" title="Bold"><i class="bi bi-type-bold"></i></button>
+        <button type="button" class="btn btn-outline-secondary" onclick="execCmd('italic')" title="Italic"><i class="bi bi-type-italic"></i></button>
+        <button type="button" class="btn btn-outline-secondary" onclick="execCmd('underline')" title="Underline"><i class="bi bi-type-underline"></i></button>
+    </div>
+
+    <div class="vr bg-secondary opacity-25"></div>
+
+    <div class="btn-group btn-group-sm">
+        <button type="button" class="btn btn-outline-secondary" onclick="execCmd('justifyLeft')" title="Align Left"><i class="bi bi-text-left"></i></button>
+        <button type="button" class="btn btn-outline-secondary" onclick="execCmd('justifyCenter')" title="Align Center"><i class="bi bi-text-center"></i></button>
+        <button type="button" class="btn btn-outline-secondary" onclick="execCmd('justifyRight')" title="Align Right"><i class="bi bi-text-right"></i></button>
+    </div>
+
+    <div class="vr bg-secondary opacity-25"></div>
+
+    <div class="d-flex align-items-center gap-1">
+        <label class="small text-secondary me-1 mb-0" data-i18n="editor_font_size">Size:</label>
+        <select class="form-select form-select-sm" style="width: auto;" onchange="execCmd('fontSize', this.value)">
+            <option value="3">Normal</option>
+            <option value="4">Medium</option>
+            <option value="5">Large</option>
+            <option value="6">Heading</option>
+            <option value="7">Title</option>
+        </select>
+    </div>
+
+    <div class="vr bg-secondary opacity-25"></div>
+
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('imgUpload').click()"><i class="bi bi-image me-1"></i><span data-i18n="editor_insert_image">Insert Image</span></button>
+    <input type="file" id="imgUpload" accept="image/*" class="d-none" onchange="insertImage(this)">
+
+    <div class="ms-auto d-flex align-items-center gap-2">
+        <label class="small text-secondary mb-0">Copies:</label>
+        <input type="number" id="a4Copies" class="form-control form-control-sm text-center" value="1" min="1" max="99" style="width: 60px;">
+    </div>
+</div>
+
+<!-- A4 Canvas Area -->
+<div class="a4-container">
+    <div class="a4-paper" id="a4Paper">
+        <h1 contenteditable="true" class="fw-bold mb-3 text-center" style="font-size: 24pt;" data-i18n-placeholder="editor_heading_placeholder">Quick Document</h1>
+        <hr style="border-top: 2px solid #333;" class="my-3">
+        <div contenteditable="true" id="a4Body" style="min-height: 200mm; font-size: 12pt; line-height: 1.6;" data-i18n-placeholder="editor_body_placeholder">
+            <p>Start typing your document text here...</p>
+        </div>
+    </div>
+</div>
+
+<!-- html2pdf JS for rendering A4 paper canvas into PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<script>
+    function execCmd(command, value = null) {
+        document.execCommand(command, false, value);
+    }
+
+    function insertImage(input) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const imgHtml = `<div style="text-align: center; margin: 15px 0;"><img src="${e.target.result}" style="max-width: 100%; max-height: 120mm; border-radius: 4px;"></div>`;
+                document.execCommand('insertHTML', false, imgHtml);
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function clearEditor() {
+        if (confirm('Clear editor content?')) {
+            document.getElementById('a4Body').innerHTML = '<p><br></p>';
+        }
+    }
+
+    async function submitA4Print() {
+        const btn = document.getElementById('printA4Btn');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status"></span> Generating PDF...`;
+
+        try {
+            const element = document.getElementById('a4Paper');
+            const opt = {
+                margin: 0,
+                filename: 'a4_document.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            // Generate PDF Blob
+            const pdfBlob = await html2pdf().set(opt).from(element).output('blob');
+
+            // Build Form Data to submit to /upload
+            const formData = new FormData();
+            formData.append('file', pdfBlob, 'a4_document.pdf');
+            formData.append('copies', document.getElementById('a4Copies').value || '1');
+
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+
+            if (response.redirected) {
+                window.location.href = response.url;
+            } else {
+                Toast.success('A4 Document submitted to print queue!');
+                setTimeout(() => window.location.href = '/dashboard', 1000);
+            }
+        } catch (err) {
+            console.error(err);
+            Toast.error('Failed to submit document: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+</script>
+{% endblock %}

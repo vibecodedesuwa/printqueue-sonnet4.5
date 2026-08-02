@@ -4,11 +4,12 @@
 {% block content %}
 <!-- Navigation -->
 <ul class="nav nav-pills mb-3">
-    <li class="nav-item"><a class="nav-link active" href="{{ url_for('web.dashboard') }}"><i class="bi bi-grid me-1"></i>My Jobs</a></li>
+    <li class="nav-item"><a class="nav-link active" href="{{ url_for('web.dashboard') }}"><i class="bi bi-grid me-1"></i><span data-i18n="my_print_jobs">My Jobs</span></a></li>
     {% if is_admin %}
-    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.admin') }}"><i class="bi bi-gear me-1"></i>Admin</a></li>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.admin') }}"><i class="bi bi-gear me-1"></i><span data-i18n="admin_panel">Admin</span></a></li>
     {% endif %}
-    <li class="nav-item"><a class="nav-link" href="{{ url_for('upload.upload_page') }}"><i class="bi bi-upload me-1"></i>Upload</a></li>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('upload.upload_page') }}"><i class="bi bi-upload me-1"></i><span data-i18n="upload_print">Upload</span></a></li>
+    <li class="nav-item"><a class="nav-link" href="{{ url_for('web.editor_page') }}"><i class="bi bi-file-earmark-text me-1"></i><span data-i18n="a4_editor">A4 Editor</span></a></li>
 </ul>
 
 <!-- Printer Status -->
@@ -23,14 +24,14 @@
 <!-- Unclaimed Jobs Section -->
 <div id="unclaimedSection" class="mb-4" style="display: none;">
     <div class="d-flex justify-content-between align-items-center mb-2">
-        <h6 class="mb-0 fw-semibold"><i class="bi bi-bell me-1 text-warning"></i>Unclaimed Jobs <span class="count-badge" style="background: #ffc048;" id="unclaimedCount">0</span></h6>
-        <small class="text-body-tertiary">Tap "Claim" if it's yours</small>
+        <h6 class="mb-0 fw-semibold"><i class="bi bi-bell me-1 text-warning"></i><span data-i18n="unclaimed_jobs">Unclaimed Jobs Pool</span> <span class="count-badge" style="background: #ffc048;" id="unclaimedCount">0</span></h6>
+        <small class="text-body-tertiary" data-i18n="claim_desc">Tap "Claim" if it's yours</small>
     </div>
 
     <!-- Desktop -->
     <div class="table-responsive-wrapper">
         <table class="table table-hover mb-0">
-            <thead><tr><th>ID</th><th>Document</th><th>From</th><th>Status</th><th>Time</th><th>Actions</th></tr></thead>
+            <thead><tr><th data-i18n="job_id">ID</th><th data-i18n="filename">Document</th><th data-i18n="submitted_by">From</th><th data-i18n="status">Status</th><th data-i18n="submitted_at">Time</th><th data-i18n="actions">Actions</th></tr></thead>
             <tbody id="unclaimedTableBody"></tbody>
         </table>
     </div>
@@ -40,14 +41,14 @@
 
 <!-- My Jobs Section -->
 <div class="d-flex justify-content-between align-items-center mb-2">
-    <h6 class="mb-0 fw-semibold"><i class="bi bi-file-earmark-text me-1"></i>My Jobs <span class="count-badge" id="myJobsCount">0</span></h6>
+    <h6 class="mb-0 fw-semibold"><i class="bi bi-file-earmark-text me-1"></i><span data-i18n="my_print_jobs">My Jobs</span> <span class="count-badge" id="myJobsCount">0</span></h6>
 </div>
 
 <div id="myJobsContent">
     <!-- Desktop -->
     <div class="table-responsive-wrapper">
         <table class="table table-hover mb-0">
-            <thead><tr><th>ID</th><th>Document</th><th>Status</th><th>Pages</th><th>Size</th><th>Time</th><th>Actions</th></tr></thead>
+            <thead><tr><th data-i18n="job_id">ID</th><th data-i18n="filename">Document</th><th data-i18n="status">Status</th><th data-i18n="pages">Pages</th><th data-i18n="size">Size</th><th data-i18n="submitted_at">Time</th><th data-i18n="actions">Actions</th></tr></thead>
             <tbody id="myJobsTableBody"></tbody>
         </table>
     </div>
@@ -57,9 +58,9 @@
 
 <div class="empty-state" id="emptyState" style="display: none;">
     <div class="empty-state-icon">🖨️</div>
-    <h6 class="text-body-secondary">No print jobs</h6>
+    <h6 class="text-body-secondary" data-i18n="no_jobs_found">No print jobs</h6>
     <p class="text-body-tertiary mb-3" style="font-size: 13px;">Upload a file or print from your device to get started!</p>
-    <a href="{{ url_for('upload.upload_page') }}" class="btn btn-primary btn-sm"><i class="bi bi-upload me-1"></i>Upload & Print</a>
+    <a href="{{ url_for('upload.upload_page') }}" class="btn btn-primary btn-sm"><i class="bi bi-upload me-1"></i><span data-i18n="upload_print">Upload & Print</span></a>
 </div>
 {% endblock %}
 

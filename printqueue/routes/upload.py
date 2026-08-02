@@ -28,22 +28,21 @@ def upload_page():
 
 
 @upload_bp.route('/upload', methods=['POST'])
-@login_required
 def upload_file():
-    """Handle file upload and submit to CUPS"""
+    """Handle file upload and submit to CUPS. Supports both session auth and QR quick upload."""
     if 'file' not in request.files:
         flash('No file selected', 'error')
-        return redirect(url_for('upload.upload_page'))
+        return redirect(url_for('upload.upload_page') if 'user' in session else url_for('web.qr_upload_page'))
 
     file = request.files['file']
     if file.filename == '':
         flash('No file selected', 'error')
-        return redirect(url_for('upload.upload_page'))
+        return redirect(url_for('upload.upload_page') if 'user' in session else url_for('web.qr_upload_page'))
 
     if not allowed_file(file.filename):
         allowed = ', '.join(current_app.config['ALLOWED_EXTENSIONS'])
         flash(f'File type not allowed. Accepted: {allowed}', 'error')
-        return redirect(url_for('upload.upload_page'))
+        return redirect(url_for('upload.upload_page') if 'user' in session else url_for('web.qr_upload_page'))
 
     # Save uploaded file
     filename = secure_filename(file.filename)
@@ -61,7 +60,7 @@ def upload_file():
     copies = request.form.get('copies', '1')
     if copies.isdigit() and int(copies) > 0:
         options['copies'] = copies
-    if request.form.get('duplex') == 'on':
+    if request.form.get('duplex') in ['on', 'true']:
         options['sides'] = 'two-sided-long-edge'
     if request.form.get('color') == 'bw':
         options['ColorModel'] = 'Gray'
@@ -71,15 +70,18 @@ def upload_file():
 
     # Submit to CUPS
     printer_name = current_app.config['PRINTER_NAME']
-    username = session['user']['username']
+    username = session.get('user', {}).get('username')
     success, result = submit_print_job(converted_path, filename, printer_name, options, requesting_user=username)
 
     if success:
         db = current_app.config['db']
-        username = session['user']['username']
-        db.create_job_meta(result, submitted_via='web', original_filename=filename, submitted_by=username)
-        flash(f'✅ Job #{result} submitted! It will print once approved.', 'success')
+        db.create_job_meta(result, submitted_via='qr_mobile' if not username else 'web', original_filename=filename, submitted_by=username)
+        if username:
+            flash(f'✅ Job #{result} submitted! It will print once approved.', 'success')
+            return redirect(url_for('web.dashboard'))
+        else:
+            flash(f'✅ Job #{result} submitted to unclaimed pool! Please claim it on the dashboard or kiosk.', 'success')
+            return redirect(url_for('web.qr_upload_page'))
     else:
         flash(f'❌ Error submitting print job: {result}', 'error')
-
-    return redirect(url_for('web.dashboard'))
+        return redirect(url_for('upload.upload_page') if 'user' in session else url_for('web.qr_upload_page'))

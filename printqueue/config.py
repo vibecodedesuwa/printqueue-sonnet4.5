@@ -23,6 +23,18 @@ class Config:
     ADMIN_GROUPS = os.environ.get('ADMIN_GROUPS', 'admins,print-admins').split(',')
     ADMIN_USERS = os.environ.get('ADMIN_USERS', 'admin').split(',')
 
+    # Active Directory / LDAP
+    LDAP_ENABLED = os.environ.get('LDAP_ENABLED', 'false').lower() == 'true'
+    LDAP_SHOW_IN_WEBUI = os.environ.get('LDAP_SHOW_IN_WEBUI', 'true').lower() == 'true'
+    LDAP_HOST = os.environ.get('LDAP_HOST', '')
+    LDAP_PORT = int(os.environ.get('LDAP_PORT', 389))
+    LDAP_USE_SSL = os.environ.get('LDAP_USE_SSL', 'false').lower() == 'true'
+    LDAP_BASE_DN = os.environ.get('LDAP_BASE_DN', '')
+    LDAP_BIND_DN = os.environ.get('LDAP_BIND_DN', '')
+    LDAP_BIND_PASSWORD = os.environ.get('LDAP_BIND_PASSWORD', '')
+    LDAP_DOMAIN = os.environ.get('LDAP_DOMAIN', '')
+    LDAP_USER_SEARCH_FILTER = os.environ.get('LDAP_USER_SEARCH_FILTER', '(&(objectClass=user)(sAMAccountName={username}))')
+
 
     # Email Print
     MAIL_ENABLED = os.environ.get('MAIL_ENABLED', 'false').lower() == 'true'

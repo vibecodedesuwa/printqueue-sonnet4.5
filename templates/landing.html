@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}PrintQ — Enterprise Print Queue Management{% endblock %}
+
+{% block content %}
+<div class="row align-items-center justify-content-center py-4">
+    <div class="col-lg-10 text-center">
+        <!-- Hero Badge -->
+        <div class="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill mb-4" style="background: rgba(124, 111, 255, 0.1); border: 1px solid rgba(124, 111, 255, 0.2);">
+            <span class="status-dot online"></span>
+            <span class="small fw-semibold text-primary" data-i18n="brand_tagline">Enterprise Print Queue & Management System</span>
+        </div>
+
+        <!-- Main Title -->
+        <h1 class="display-4 fw-bold mb-3" style="background: linear-gradient(135deg, #ffffff 0%, #a78bfa 50%, #7c6fff 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+            <span data-i18n="landing_title">Smart Enterprise Print Management</span>
+        </h1>
+        
+        <p class="lead text-secondary max-w-2xl mx-auto mb-5" style="font-size: 1.1rem; max-width: 700px;" data-i18n="landing_subtitle">
+            Unified Print Queue for Windows, Mac, Linux, iOS, iPadOS & Android with Authentik SSO & Active Directory
+        </p>
+
+        <!-- CTA Login Action Buttons -->
+        <div class="d-flex flex-column flex-sm-row align-items-center justify-content-center gap-3 mb-5">
+            <a href="{{ url_for('web.login') }}" class="btn btn-primary btn-lg px-4 py-3 shadow-lg d-flex align-items-center gap-2">
+                <i class="bi bi-shield-lock-fill fs-5"></i>
+                <span data-i18n="login_with_echostory">Login with EchoStory</span>
+            </a>
+            
+            {% if ldap_enabled %}
+            <button type="button" class="btn btn-outline-light btn-lg px-4 py-3 d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#adLoginModal">
+                <i class="bi bi-microsoft fs-5 text-info"></i>
+                <span data-i18n="login_with_ad">Login with Active Directory</span>
+            </button>
+            {% endif %}
+
+            <a href="{{ url_for('web.qr_upload_page') }}" class="btn btn-outline-warning btn-lg px-4 py-3 d-flex align-items-center gap-2">
+                <i class="bi bi-qr-code-scan fs-5"></i>
+                <span data-i18n="qr_mobile_print">QR Mobile Print</span>
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Enterprise Features Grid -->
+<div class="row g-4 mt-2">
+    <div class="col-md-4">
+        <div class="card h-100 p-4" style="background: rgba(18, 18, 31, 0.6); border: 1px solid rgba(124, 111, 255, 0.15); border-radius: 16px;">
+            <div class="rounded-3 p-3 mb-3 d-inline-block" style="background: rgba(124, 111, 255, 0.1); width: 48px; height: 48px; text-align: center;">
+                <i class="bi bi-phone-vibrate text-primary fs-4"></i>
+            </div>
+            <h5 class="fw-bold mb-2">Cross-Platform Support</h5>
+            <p class="text-secondary small mb-0">Native AirPrint and Mopria support for iOS, iPadOS, Android, macOS, Windows 10/11 and Linux without driver installation.</p>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card h-100 p-4" style="background: rgba(18, 18, 31, 0.6); border: 1px solid rgba(0, 217, 166, 0.15); border-radius: 16px;">
+            <div class="rounded-3 p-3 mb-3 d-inline-block" style="background: rgba(0, 217, 166, 0.1); width: 48px; height: 48px; text-align: center;">
+                <i class="bi bi-fingerprint text-success fs-4"></i>
+            </div>
+            <h5 class="fw-bold mb-2">Dual Auth & Security</h5>
+            <p class="text-secondary small mb-0">Integrated with Active Directory (LDAP) & Authentik OIDC SSO for seamless identity verification and group permissions.</p>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card h-100 p-4" style="background: rgba(18, 18, 31, 0.6); border: 1px solid rgba(255, 192, 72, 0.15); border-radius: 16px;">
+            <div class="rounded-3 p-3 mb-3 d-inline-block" style="background: rgba(255, 192, 72, 0.1); width: 48px; height: 48px; text-align: center;">
+                <i class="bi bi-qr-code text-warning fs-4"></i>
+            </div>
+            <h5 class="fw-bold mb-2">QR & A4 Quick Tools</h5>
+            <p class="text-secondary small mb-0">Instant QR Code upload for mobile camera/file printing and built-in A4 document editor for fast page composition.</p>
+        </div>
+    </div>
+</div>
+
+{% if ldap_enabled %}
+<!-- Active Directory Login Modal -->
+<div class="modal fade" id="adLoginModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form action="{{ url_for('web.login_ad') }}" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title d-flex align-items-center gap-2">
+                        <i class="bi bi-microsoft text-info"></i>
+                        <span data-i18n="ad_auth_title">Active Directory Login</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body py-4">
+                    <div class="mb-3">
+                        <label class="form-label" data-i18n="ad_username">AD Username</label>
+                        <input type="text" name="username" class="form-control" placeholder="e.g. john.doe" required autocomplete="username">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" data-i18n="ad_password">Password</label>
+                        <input type="password" name="password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal" data-i18n="qr_close">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm px-4" data-i18n="login_btn">Log In</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

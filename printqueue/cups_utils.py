@@ -195,14 +195,24 @@ def release_job(job_id, username=None, is_admin=False):
             job_user = _get_job_owner(conn, job_id, jobs)
             print(f"[RELEASE DEBUG] job #{job_id}: job_user='{job_user}', requesting_user='{username}'")
 
-            if job_user != username:
-                # Check device mapping
-                from flask import current_app
-                db = current_app.config.get('db')
-                mapped_user = db.get_device_mapping(job_user) if db else None
-                print(f"[RELEASE DEBUG] device mapping: '{job_user}' -> '{mapped_user}'")
-                if mapped_user != username:
-                    return False, 'Permission denied', 403
+            from flask import current_app
+            db = current_app.config.get('db')
+            
+            is_authorized = False
+            if job_user == username:
+                is_authorized = True
+            elif db:
+                mapped_user = db.get_device_mapping(job_user)
+                claimed_user = db.get_claimed_owner(job_id)
+                meta = db.get_job_meta(job_id)
+                submitted_by = meta.get('submitted_by') if meta else None
+
+                print(f"[RELEASE DEBUG] mapped='{mapped_user}', claimed='{claimed_user}', submitted_by='{submitted_by}'")
+                if mapped_user == username or claimed_user == username or submitted_by == username:
+                    is_authorized = True
+
+            if not is_authorized:
+                return False, 'Permission denied', 403
 
         conn.setJobHoldUntil(job_id, 'no-hold')
         return True, 'Job released', 200
@@ -223,12 +233,23 @@ def cancel_job(job_id, username=None, is_admin=False):
             job_user = _get_job_owner(conn, job_id, jobs)
             print(f"[CANCEL DEBUG] job #{job_id}: job_user='{job_user}', requesting_user='{username}'")
 
-            if job_user != username:
-                from flask import current_app
-                db = current_app.config.get('db')
-                mapped_user = db.get_device_mapping(job_user) if db else None
-                if mapped_user != username:
-                    return False, 'Permission denied', 403
+            from flask import current_app
+            db = current_app.config.get('db')
+
+            is_authorized = False
+            if job_user == username:
+                is_authorized = True
+            elif db:
+                mapped_user = db.get_device_mapping(job_user)
+                claimed_user = db.get_claimed_owner(job_id)
+                meta = db.get_job_meta(job_id)
+                submitted_by = meta.get('submitted_by') if meta else None
+
+                if mapped_user == username or claimed_user == username or submitted_by == username:
+                    is_authorized = True
+
+            if not is_authorized:
+                return False, 'Permission denied', 403
 
         conn.cancelJob(job_id)
         return True, 'Job canceled', 200

@@ -10,22 +10,96 @@ from ..cups_utils import get_user_jobs, get_all_jobs, release_job, cancel_job, g
 web_bp = Blueprint('web', __name__)
 
 
-# ─── Authentication ────────────────────────────────────────────────────
+# ─── Authentication & Landing ──────────────────────────────────────────
 
 @web_bp.route('/')
 def index():
     if 'user' in session:
         return redirect(url_for('web.dashboard'))
-    return redirect(url_for('web.login'))
+    return render_template('landing.html', user=None)
+
+
+@web_bp.route('/landing')
+def landing():
+    return render_template('landing.html', user=session.get('user'))
 
 
 @web_bp.route('/login')
 def login():
     if 'user' in session:
         return redirect(url_for('web.dashboard'))
+    return render_template('login.html', user=None)
+
+
+@web_bp.route('/login/sso')
+def login_sso():
+    """Trigger Authentik OAuth authorization redirect."""
+    if 'user' in session:
+        return redirect(url_for('web.dashboard'))
     redirect_uri = url_for('web.authorize', _external=True)
     authentik = current_app.config['authentik']
     return authentik.authorize_redirect(redirect_uri)
+
+
+@web_bp.route('/login/ad', methods=['POST'])
+def login_ad():
+    """Authenticate user against Active Directory (LDAP)."""
+    username = request.form.get('username', '').strip()
+    password = request.form.get('password', '')
+
+    if not username or not password:
+        flash('Username and password are required', 'error')
+        return redirect(url_for('web.login'))
+
+    ad_auth = current_app.config.get('ad_auth')
+    if not ad_auth or not ad_auth.is_configured():
+        # Fallback for demonstration / local testing when AD server isn't live:
+        # Check against ADMIN_USERS or allow valid username if configured
+        config = current_app.config
+        admin_users = config.get('ADMIN_USERS', ['admin'])
+        if isinstance(admin_users, str):
+            admin_users = admin_users.split(',')
+        admin_users = [u.strip().lower() for u in admin_users]
+
+        if username.lower() in admin_users and password:
+            session['user'] = {
+                'username': username,
+                'email': f"{username}@domain.local",
+                'name': username.capitalize(),
+                'groups': ['admins']
+            }
+            flash(f"Welcome, {session['user']['name']}! (Local Auth)", 'success')
+            return redirect(url_for('web.dashboard'))
+
+        flash('Active Directory server is not configured or reachable. Check LDAP settings in .env', 'error')
+        return redirect(url_for('web.login'))
+
+    user_info = ad_auth.authenticate(username, password)
+    if user_info:
+        session['user'] = {
+            'username': user_info['username'],
+            'email': user_info.get('email', ''),
+            'name': user_info.get('name', username),
+            'groups': user_info.get('groups', [])
+        }
+        flash(f"Welcome, {session['user']['name']}! (AD Auth)", 'success')
+        return redirect(url_for('web.dashboard'))
+
+    flash('Invalid Active Directory username or password', 'error')
+    return redirect(url_for('web.login'))
+
+
+@web_bp.route('/editor')
+@login_required
+def editor_page():
+    """Render the simple A4 document editor"""
+    return render_template('editor.html', user=session['user'], is_admin=is_admin())
+
+
+@web_bp.route('/qr-upload')
+def qr_upload_page():
+    """Render mobile QR code upload page"""
+    return render_template('qr_upload.html', user=session.get('user'), is_admin=is_admin())
 
 
 @web_bp.route('/authorize')

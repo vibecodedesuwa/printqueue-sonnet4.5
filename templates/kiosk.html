@@ -101,14 +101,29 @@
 </head>
 <body>
     <!-- Header -->
-    <div class="kiosk-header d-flex justify-content-between align-items-center">
+    <div class="kiosk-header d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h1 class="mb-0 fs-4 fw-bold" style="background: linear-gradient(135deg, #7c6fff, #e94560); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;">
             🖨️ PrintQ Kiosk
         </h1>
-        <div class="d-flex align-items-center gap-3">
-            <small class="clock text-body-tertiary" id="clock"></small>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <!-- Language Switcher Dropdown -->
+            <div class="dropdown me-1">
+                <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" id="currentLangLabel">
+                    🇺🇸 EN
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow border-secondary">
+                    <li><a class="dropdown-item text-body py-2" href="#" onclick="setLanguage('en'); refresh(); return false;">🇺🇸 English</a></li>
+                    <li><a class="dropdown-item text-body py-2" href="#" onclick="setLanguage('th'); refresh(); return false;">🇹🇭 ภาษาไทย (Thai)</a></li>
+                </ul>
+            </div>
+
+            <button type="button" class="btn btn-warning btn-sm fw-bold px-3 d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#kioskQrModal">
+                <i class="bi bi-qr-code-scan fs-6"></i>
+                <span data-i18n="qr_mobile_print">QR Print</span>
+            </button>
+            <small class="clock text-body-tertiary d-none d-sm-inline" id="clock"></small>
             {% if device %}
-            <span class="badge bg-secondary bg-opacity-25 text-body-secondary"><i class="bi bi-laptop me-1"></i>{{ device.name }}</span>
+            <span class="badge bg-secondary bg-opacity-25 text-body-secondary d-none d-md-inline"><i class="bi bi-laptop me-1"></i>{{ device.name }}</span>
             {% endif %}
             <span class="badge {{ 'text-bg-success' if printer.state == 3 else 'text-bg-danger' }}" id="printerBadge">
                 <span class="pulse-dot {{ 'online' if printer.state == 3 else 'offline' }} me-1"></span>
@@ -117,10 +132,39 @@
         </div>
     </div>
 
+    <!-- QR Code Modal (Kiosk) -->
+    <div class="modal fade" id="kioskQrModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background: #1e1e32; border: 1px solid rgba(255, 192, 72, 0.3); border-radius: 16px;">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title d-flex align-items-center gap-2 text-warning fw-bold">
+                        <i class="bi bi-qr-code-scan fs-4"></i>
+                        <span data-i18n="kiosk_qr_title">Scan QR for Smartphone Printing</span>
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center py-4">
+                    <p class="text-secondary small mb-3" data-i18n="kiosk_qr_desc">Scan with your smartphone camera on the Internal Network to upload files or edit A4 documents directly.</p>
+                    <div class="p-3 bg-white rounded-3 d-inline-block shadow-lg mb-3">
+                        <div id="kioskQrContainer"></div>
+                    </div>
+                    <div class="input-group input-group-sm max-w-sm mx-auto" style="max-width: 320px;">
+                        <input type="text" id="kioskQrUrlInput" class="form-control text-center bg-dark text-light border-secondary" readonly>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal" data-i18n="qr_close">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Jobs Grid -->
     <div class="jobs-grid" id="jobsContainer"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
     <script>
         // ─── Clock ───────────────────────────────────────────────
         function updateClock() {
@@ -142,10 +186,11 @@
             let actions = '';
             if ([3, 4].includes(job.state)) {
                 actions = `<div class="d-flex gap-3 mt-3">
-                    <button class="kiosk-btn kiosk-btn-approve" onclick="approveJob(${job.id}, this)"><i class="bi bi-check-lg"></i> Approve</button>
-                    <button class="kiosk-btn kiosk-btn-deny" onclick="denyJob(${job.id}, this)"><i class="bi bi-x-lg"></i> Deny</button>
+                    <button class="kiosk-btn kiosk-btn-approve" onclick="approveJob(${job.id}, this)"><i class="bi bi-check-lg"></i> ${t('approve', 'Approve')}</button>
+                    <button class="kiosk-btn kiosk-btn-deny" onclick="denyJob(${job.id}, this)"><i class="bi bi-x-lg"></i> ${t('deny', 'Deny')}</button>
                 </div>`;
             }
+            const pagesStr = job.pages > 0 ? `${job.pages} ${t('pages', 'pages')}` : '—';
             return `<div class="kiosk-card ${isNew ? 'fade-in' : ''}" data-job-id="${job.id}">
                 <div class="d-flex justify-content-between align-items-start mb-2">
                     <span class="badge bg-${cls} bg-opacity-25 text-${cls}">${job.state_text}</span>
@@ -154,7 +199,7 @@
                 <h5 class="fs-5 fw-bold text-truncate mb-2"><i class="bi bi-file-earmark me-1"></i>${job.name || 'Untitled'}</h5>
                 <div class="row g-1 text-body-secondary small mb-0">
                     <div class="col-6"><i class="bi bi-person"></i> ${job.user || 'Unknown'}</div>
-                    <div class="col-6"><i class="bi bi-files"></i> ${job.pages > 0 ? job.pages + ' pages' : '—'}</div>
+                    <div class="col-6"><i class="bi bi-files"></i> ${pagesStr}</div>
                     <div class="col-6"><i class="bi bi-hdd"></i> ${job.size} KB</div>
                     <div class="col-6"><i class="bi bi-clock"></i> ${job.time}</div>
                 </div>
@@ -170,8 +215,8 @@
             if (jobs.length === 0) {
                 container.innerHTML = `<div class="empty-kiosk">
                     <div style="font-size: 64px; margin-bottom: 16px;">✨</div>
-                    <h4 class="text-body-secondary">All clear!</h4>
-                    <p class="text-body-tertiary">No pending print jobs. Waiting for new jobs...</p>
+                    <h4 class="text-body-secondary">${t('all_clear', 'All clear!')}</h4>
+                    <p class="text-body-tertiary">${t('no_pending_jobs', 'No pending print jobs. Waiting for new jobs...')}</p>
                 </div>`;
             } else {
                 container.innerHTML = jobs.map(j => renderCard(j, !prevJobIds.has(j.id))).join('');
@@ -212,16 +257,16 @@
                 const r = await fetch(`/kiosk/api/job/${id}/release`, { method: 'POST' });
                 const d = await r.json();
                 if (d.success) {
-                    btn.innerHTML = '<i class="bi bi-check-lg"></i> Done!';
+                    btn.innerHTML = `<i class="bi bi-check-lg"></i> ${t('done', 'Done!')}`;
                     if (navigator.vibrate) navigator.vibrate(100);
                     setTimeout(refresh, 800);
                 } else {
                     btn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Error';
-                    setTimeout(() => { btn.innerHTML = '<i class="bi bi-check-lg"></i> Approve'; btn.disabled = false; }, 2000);
+                    setTimeout(() => { btn.innerHTML = `<i class="bi bi-check-lg"></i> ${t('approve', 'Approve')}`; btn.disabled = false; }, 2000);
                 }
             } catch (e) {
                 btn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Error';
-                setTimeout(() => { btn.innerHTML = '<i class="bi bi-check-lg"></i> Approve'; btn.disabled = false; }, 2000);
+                setTimeout(() => { btn.innerHTML = `<i class="bi bi-check-lg"></i> ${t('approve', 'Approve')}`; btn.disabled = false; }, 2000);
             }
         }
 
@@ -232,18 +277,35 @@
                 const r = await fetch(`/kiosk/api/job/${id}/cancel`, { method: 'POST' });
                 const d = await r.json();
                 if (d.success) {
-                    btn.innerHTML = '<i class="bi bi-x-lg"></i> Denied';
+                    btn.innerHTML = `<i class="bi bi-x-lg"></i> ${t('denied', 'Denied')}`;
                     if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
                     setTimeout(refresh, 800);
                 } else {
                     btn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Error';
-                    setTimeout(() => { btn.innerHTML = '<i class="bi bi-x-lg"></i> Deny'; btn.disabled = false; }, 2000);
+                    setTimeout(() => { btn.innerHTML = `<i class="bi bi-x-lg"></i> ${t('deny', 'Deny')}`; btn.disabled = false; }, 2000);
                 }
             } catch (e) {
                 btn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Error';
-                setTimeout(() => { btn.innerHTML = '<i class="bi bi-x-lg"></i> Deny'; btn.disabled = false; }, 2000);
+                setTimeout(() => { btn.innerHTML = `<i class="bi bi-x-lg"></i> ${t('deny', 'Deny')}`; btn.disabled = false; }, 2000);
             }
         }
+        // ─── Kiosk QR Code Modal ─────────────────────────────────
+        document.getElementById('kioskQrModal')?.addEventListener('shown.bs.modal', function () {
+            const container = document.getElementById('kioskQrContainer');
+            if (container) {
+                container.innerHTML = '';
+                const qrUrl = window.location.origin + '/qr-upload';
+                document.getElementById('kioskQrUrlInput').value = qrUrl;
+                new QRCode(container, {
+                    text: qrUrl,
+                    width: 200,
+                    height: 200,
+                    colorDark : "#0f0f1a",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H
+                });
+            }
+        });
     </script>
 </body>
 </html>
