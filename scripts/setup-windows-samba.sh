@@ -203,7 +203,9 @@ cat > /etc/samba/smb.conf <<EOF
     realm = $SAMBA_REALM_UPPER
     security = ADS
     server role = member server
+    server min protocol = SMB2
     kerberos method = secrets and keytab
+    dns proxy = no
 
     idmap config * : backend = tdb
     idmap config * : range = 10000-999999
@@ -217,9 +219,25 @@ cat > /etc/samba/smb.conf <<EOF
 
     printing = cups
     printcap name = cups
+    printcap cache time = 60
+    lpq cache time = 30
     load printers = no
-    rpcd_spoolss:idle_seconds = 60
+    rpcd_spoolss:idle_seconds = 300
+    rpcd_spoolss:num_workers = 5
     map to guest = never
+
+# samba-bgqd and rpcd_spoolss use this special hidden template to maintain
+# Samba's CUPS printer cache. Individual queues are still exposed explicitly.
+[printers]
+    comment = PrintQ CUPS printer template
+    path = /var/spool/samba
+    printable = yes
+    browseable = no
+    guest ok = no
+    read only = yes
+    create mask = 0600
+    use client driver = yes
+    cups options = raw
 
 [$SAMBA_SHARE_NAME]
     comment = PrintQ AD-authenticated Windows queue
@@ -250,7 +268,15 @@ fi
 service_enable_start "$WINBIND_SERVICE"
 service_enable_start "$SMB_SERVICE"
 if systemctl cat samba-bgqd.service >/dev/null 2>&1; then
-    systemctl enable --now samba-bgqd.service
+    systemctl enable samba-bgqd.service
+fi
+
+# setup-windows-samba.sh is intentionally rerunnable. Restart existing daemons
+# so they all consume the newly generated configuration immediately.
+systemctl restart "$WINBIND_SERVICE"
+systemctl restart "$SMB_SERVICE"
+if systemctl cat samba-bgqd.service >/dev/null 2>&1; then
+    systemctl restart samba-bgqd.service
 fi
 
 if command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then

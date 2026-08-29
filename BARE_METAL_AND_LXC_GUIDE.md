@@ -423,6 +423,13 @@ attach the share because PrintQ does not host a Windows driver, install the
 physical printer's vendor driver and create a **Local Port** whose name is the
 same UNC path. See `CLIENT_PRINT_GUIDE.md` for the click-by-click procedure.
 
+If Windows printer actions are slow, compare `time id 'DOMAIN\\user'` with
+`time wbinfo --user-groups='DOMAIN\\user'` and inspect the Samba journal. The
+generated configuration includes a hidden `[printers]` template for
+`samba-bgqd`, keeps SPOOLSS workers warm for five minutes, and caches CUPS
+printer and queue queries. Re-run `setup-windows-samba.sh` after updating to
+apply these settings to an existing server.
+
 ---
 
 ## B.5 — Install PrintQ Web App
