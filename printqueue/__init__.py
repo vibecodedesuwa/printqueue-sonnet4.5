@@ -4,6 +4,7 @@ Print Queue Manager — Flask Application Factory
 from flask import Flask
 from flask_cors import CORS
 from authlib.integrations.flask_client import OAuth
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .config import Config
 from .models import Database
@@ -13,6 +14,12 @@ def create_app(config_class=Config):
     app = Flask(__name__,
                 template_folder='../templates',
                 static_folder='../static')
+
+    # Honour the public HTTPS host/scheme when a local reverse proxy is used.
+    # This is opt-in because forwarded headers must never be trusted from an
+    # untrusted client connecting directly to Gunicorn.
+    if getattr(config_class, 'TRUST_PROXY', False):
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1, x_port=1)
 
     # Load config
     app.secret_key = config_class.SECRET_KEY

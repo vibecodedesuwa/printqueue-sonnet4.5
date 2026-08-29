@@ -1,0 +1,22 @@
+# PrintQ web UI and the read-only/user-facing CUPS printer pages.
+# Caddy obtains and renews HTTPS certificates automatically when the domain's
+# DNS points to this server and TCP ports 80/443 are reachable.
+printq.echo.story {
+	encode zstd gzip
+
+	# Friendly shortcut. CUPS generates root-relative links, so keep its native
+	# /printers path instead of mounting it under /cups.
+	@cupsLanding path /cups /cups/
+	redir @cupsLanding /printers/ 302
+
+	# CUPS printer pages, jobs, classes, help, and their static assets.
+	@cupsUI path /printers /printers/* /jobs /jobs/* /classes /classes/* /help /help/* /images /images/* /cups.css
+	handle @cupsUI {
+		reverse_proxy 127.0.0.1:631
+	}
+
+	# Everything else, including /admin, belongs to PrintQ.
+	handle {
+		reverse_proxy 127.0.0.1:5000
+	}
+}

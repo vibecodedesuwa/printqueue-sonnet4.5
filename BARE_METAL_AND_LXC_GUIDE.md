@@ -840,6 +840,42 @@ Your print queue management system is now ready! Users can:
 | `http://<server-ip>:5000/api/docs` | API Documentation (Swagger)  |
 | `http://<server-ip>:631`         | CUPS Web Interface             |
 
+### Caddy HTTPS reverse proxy
+
+The repository includes a ready-to-use Caddy configuration for
+`printq.echo.story`. It sends the main site to PrintQ and exposes the CUPS
+printer pages at `/printers/`; `/cups` redirects there.
+
+1. Point the DNS record for `printq.echo.story` at the PrintQ server and allow
+   inbound TCP ports 80 and 443.
+2. Install Caddy from its official distribution package.
+3. From the deployed PrintQ directory, run:
+
+   ```bash
+   sudo bash scripts/setup-caddy.sh
+   ```
+
+The setup backs up an existing `/etc/caddy/Caddyfile`, validates the new file
+before reloading Caddy, enables trusted proxy headers, and binds PrintQ's port
+5000 to localhost so clients cannot bypass the proxy. On firewalld systems it
+opens ports 80/443 and removes the old public port-5000 rule.
+
+Then use:
+
+- PrintQ: `https://printq.echo.story/`
+- CUPS printers: `https://printq.echo.story/printers/`
+- Shortcut: `https://printq.echo.story/cups`
+
+CUPS and PrintQ both define `/admin`, so the proxy preserves `/admin` for
+PrintQ. Use `http://<server-ip>:631/admin` for CUPS administration. IPP,
+AirPrint, Mopria, and Windows/Samba printing also continue to use their native
+ports rather than HTTPS port 443.
+
+If Authentik is enabled, register
+`https://printq.echo.story/authorize` as its redirect URI. If Collabora is
+enabled, set `WOPI_PUBLIC_URL=https://printq.echo.story` in `.env` and restart
+PrintQ.
+
 ---
 
 ## 🆘 Quick Reference

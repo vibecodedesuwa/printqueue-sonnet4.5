@@ -10,6 +10,8 @@ class Config:
     # Flask
     SECRET_KEY = os.environ.get('SECRET_KEY', 'change-this-in-production-please')
     MAX_CONTENT_LENGTH = int(os.environ.get('MAX_UPLOAD_SIZE', 50)) * 1024 * 1024  # MB
+    # Enable only when PrintQ is reached through a trusted local reverse proxy.
+    TRUST_PROXY = os.environ.get('TRUST_PROXY', 'false').lower() == 'true'
 
     # Authentik OAuth
     AUTHENTIK_CLIENT_ID = os.environ.get('AUTHENTIK_CLIENT_ID')
