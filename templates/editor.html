@@ -24,6 +24,18 @@
         border-radius: 4px;
         box-sizing: border-box;
         font-family: 'Noto Sans Thai', Tahoma, Arial, sans-serif;
+        letter-spacing: 0;
+        word-break: normal;
+        overflow-wrap: normal;
+    }
+
+    /* html2canvas draws text one grapheme at a time whenever letter spacing is
+       non-zero. That breaks Thai combining vowels/marks, so override the
+       heading style inherited from the main UI as well as pasted content. */
+    .a4-paper * {
+        letter-spacing: 0 !important;
+        word-break: normal;
+        overflow-wrap: normal;
     }
 
     .a4-paper [contenteditable="true"]:focus {
@@ -216,6 +228,10 @@
         btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status"></span> Generating PDF...`;
 
         try {
+            normalizeA4Text(document.getElementById('a4Paper'));
+            if (document.fonts?.load) {
+                await document.fonts.load('400 16px "Noto Sans Thai"', 'ทดสอบการพิมพ์ภาษาไทย');
+            }
             if (document.fonts?.ready) await document.fonts.ready;
             const element = document.getElementById('a4Paper');
             const opt = {
@@ -252,6 +268,14 @@
         } finally {
             btn.disabled = false;
             btn.innerHTML = originalText;
+        }
+    }
+
+    function normalizeA4Text(root) {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+            node.nodeValue = node.nodeValue.normalize('NFC');
         }
     }
 </script>

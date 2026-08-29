@@ -15,6 +15,7 @@ class FakeConnection:
     def __init__(self, owner):
         self.owner = owner
         self.released = []
+        self.printed = []
 
     def getJobs(self, **_kwargs):
         return {12: {"job-originating-user-name": self.owner}}
@@ -24,6 +25,10 @@ class FakeConnection:
 
     def setJobHoldUntil(self, job_id, value):
         self.released.append((job_id, value))
+
+    def printFile(self, printer, file_path, title, options):
+        self.printed.append((printer, file_path, title, options.copy()))
+        return 13
 
 
 class FakeDatabase:
@@ -66,6 +71,21 @@ class CupsAuthorizationTests(unittest.TestCase):
         result, connection = self.call_release(r"ACME\Alice", "alice")
         self.assertEqual(result, (True, "Job released", 200))
         self.assertEqual(connection.released, [(12, "no-hold")])
+
+    def test_direct_upload_explicitly_overrides_queue_hold(self):
+        connection = FakeConnection("guest")
+        with patch.object(self.module, "get_cups_connection", return_value=connection):
+            result = self.module.submit_print_job(
+                "/tmp/example.pdf", "example.pdf", "PrintQ", hold=False
+            )
+        self.assertEqual(result, (True, 13))
+        self.assertEqual(connection.printed[0][3]["job-hold-until"], "no-hold")
+
+    def test_other_submission_paths_remain_held_by_default(self):
+        connection = FakeConnection("alice")
+        with patch.object(self.module, "get_cups_connection", return_value=connection):
+            self.module.submit_print_job("/tmp/example.pdf", "example.pdf", "PrintQ")
+        self.assertEqual(connection.printed[0][3]["job-hold-until"], "indefinite")
 
 
 if __name__ == "__main__":

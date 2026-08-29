@@ -33,6 +33,7 @@ def create_app(config_class=Config):
     app.config['UNCLAIMED_JOB_TIMEOUT_HOURS'] = config_class.UNCLAIMED_JOB_TIMEOUT_HOURS
     app.config['UPLOAD_FOLDER'] = config_class.UPLOAD_FOLDER
     app.config['ALLOWED_EXTENSIONS'] = config_class.ALLOWED_EXTENSIONS
+    app.config['AUTO_PRINT_QR_UPLOADS'] = getattr(config_class, 'AUTO_PRINT_QR_UPLOADS', True)
     app.config['COLLABORA_ENABLED'] = config_class.COLLABORA_ENABLED
     app.config['COLLABORA_URL'] = config_class.COLLABORA_URL
     app.config['COLLABORA_INTERNAL_URL'] = config_class.COLLABORA_INTERNAL_URL

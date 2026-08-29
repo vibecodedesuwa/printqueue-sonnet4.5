@@ -132,6 +132,7 @@ docker compose up -d --build
 | `PRINTER_NAME`            | `HP_Smart_Tank_515`   | Target CUPS printer name (must match actual CUPS printer name, e.g. `lpstat -p`) |
 | `CUPS_USER`               | `print`               | CUPS service account used by the web application      |
 | `CUPS_PASSWORD`           | `print`               | CUPS service password; change this before deployment  |
+| `AUTO_PRINT_QR_UPLOADS`   | `true`                | Print QR-page files/photos/A4 immediately; dashboard upload paths remain held |
 | `COLLABORA_ENABLED`       | `false`               | Enable the Collabora Office editor                     |
 | `COLLABORA_URL`           |                       | Browser-facing Collabora URL                           |
 | `COLLABORA_INTERNAL_URL`  |                       | Optional LAN URL used to fetch Collabora discovery     |

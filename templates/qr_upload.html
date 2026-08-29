@@ -44,6 +44,15 @@
         box-sizing: border-box;
         font-family: 'Noto Sans Thai', Tahoma, Arial, sans-serif;
         font-size: 14px;
+        letter-spacing: 0;
+        word-break: normal;
+        overflow-wrap: normal;
+    }
+
+    .a4-mobile-paper * {
+        letter-spacing: 0 !important;
+        word-break: normal;
+        overflow-wrap: normal;
     }
 
     .a4-mobile-paper [contenteditable="true"]:focus {
@@ -105,6 +114,7 @@
                 <!-- Tab 1: File Upload & Camera Photo Capture -->
                 <div class="tab-pane fade show active" id="upload-panel" role="tabpanel">
                     <form action="{{ url_for('upload.upload_file') }}" method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="submission_source" value="qr_file_upload">
                         <div class="mb-3 dropzone-box" id="mobileDropzone">
                             <i class="bi bi-cloud-arrow-up text-warning display-5 mb-2"></i>
                             <h6 class="fw-bold mb-1 fs-6" data-i18n="drag_drop_text">Tap to Pick File or Take Photo</h6>
@@ -226,6 +236,10 @@
         btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status"></span>`;
 
         try {
+            normalizeMobileA4Text(document.getElementById('mobileA4Paper'));
+            if (document.fonts?.load) {
+                await document.fonts.load('400 16px "Noto Sans Thai"', 'ทดสอบการพิมพ์ภาษาไทย');
+            }
             if (document.fonts?.ready) await document.fonts.ready;
             const element = document.getElementById('mobileA4Paper');
             const opt = {
@@ -241,6 +255,7 @@
             const formData = new FormData();
             formData.append('file', pdfBlob, 'a4_mobile_doc.pdf');
             formData.append('copies', document.getElementById('mobileA4Copies').value || '1');
+            formData.append('submission_source', 'qr_a4_editor');
 
             const response = await fetch('/upload', {
                 method: 'POST',
@@ -260,6 +275,14 @@
         } finally {
             btn.disabled = false;
             btn.innerHTML = originalText;
+        }
+    }
+
+    function normalizeMobileA4Text(root) {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+            node.nodeValue = node.nodeValue.normalize('NFC');
         }
     }
 </script>

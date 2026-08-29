@@ -72,16 +72,40 @@ def upload_file():
     # Submit to CUPS
     printer_name = current_app.config['PRINTER_NAME']
     username = session.get('user', {}).get('username')
-    success, result = submit_print_job(converted_path, original_filename, printer_name, options, requesting_user=username)
+    submission_source = request.form.get('submission_source', '')
+    is_qr_submission = submission_source in {'qr_file_upload', 'qr_a4_editor'}
+    auto_print = is_qr_submission and current_app.config.get('AUTO_PRINT_QR_UPLOADS', True)
+    success, result = submit_print_job(
+        converted_path,
+        original_filename,
+        printer_name,
+        options,
+        requesting_user=username,
+        hold=not auto_print,
+    )
 
     if success:
         db = current_app.config['db']
-        db.create_job_meta(result, submitted_via='qr_mobile' if not username else 'web', original_filename=original_filename, submitted_by=username)
+        if submission_source == 'qr_a4_editor':
+            submitted_via = 'qr_a4'
+        elif submission_source == 'qr_file_upload':
+            submitted_via = 'qr_mobile'
+        else:
+            submitted_via = 'web'
+        db.create_job_meta(result, submitted_via=submitted_via, original_filename=original_filename, submitted_by=username)
         if username:
-            flash(f'✅ Job #{result} submitted! It will print once approved.', 'success')
+            message = (
+                f'✅ Job #{result} sent directly to the printer.' if auto_print
+                else f'✅ Job #{result} submitted! It will print once approved.'
+            )
+            flash(message, 'success')
             return redirect(url_for('web.dashboard'))
         else:
-            flash(f'✅ Job #{result} submitted to unclaimed pool! Please claim it on the dashboard or kiosk.', 'success')
+            message = (
+                f'✅ Guest job #{result} sent directly to the printer.' if auto_print
+                else f'✅ Job #{result} submitted to unclaimed pool! Please claim it on the dashboard or kiosk.'
+            )
+            flash(message, 'success')
             return redirect(url_for('web.qr_upload_page'))
     else:
         flash(f'❌ Error submitting print job: {result}', 'error')

@@ -308,6 +308,7 @@ CUPS_PASSWORD=$(openssl rand -hex 16)
 
 # Application Settings
 FLASK_ENV=production
+AUTO_PRINT_QR_UPLOADS=true
 
 # Email Print (set MAIL_ENABLED=true to activate)
 MAIL_ENABLED=false

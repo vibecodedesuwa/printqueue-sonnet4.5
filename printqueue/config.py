@@ -64,6 +64,9 @@ class Config:
     # File Upload
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'data/uploads')
     ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'docx', 'doc', 'txt'}
+    # Files/photos and A4 PDFs submitted from the QR page print immediately.
+    # Dashboard uploads/editors retain the held-job approval flow.
+    AUTO_PRINT_QR_UPLOADS = os.environ.get('AUTO_PRINT_QR_UPLOADS', 'true').lower() == 'true'
 
     # Collabora Online / WOPI
     COLLABORA_ENABLED = os.environ.get('COLLABORA_ENABLED', 'false').lower() == 'true'

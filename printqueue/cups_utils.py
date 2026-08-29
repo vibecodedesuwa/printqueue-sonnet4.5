@@ -369,8 +369,8 @@ def list_printers():
         return []
 
 
-def submit_print_job(file_path, title='Untitled', printer_name=None, options=None, requesting_user=None):
-    """Submit a file to CUPS as a held print job.
+def submit_print_job(file_path, title='Untitled', printer_name=None, options=None, requesting_user=None, hold=True):
+    """Submit a file to CUPS, held by default unless the caller opts into direct printing.
     requesting_user is stored in app DB, not in CUPS (requires root).
     """
     if printer_name is None:
@@ -378,8 +378,9 @@ def submit_print_job(file_path, title='Untitled', printer_name=None, options=Non
     if options is None:
         options = {}
 
-    # Always hold the job
-    options['job-hold-until'] = 'indefinite'
+    # Set this explicitly so a direct app submission can override the printer's
+    # queue-wide indefinite hold default without changing IPP/AirPrint behavior.
+    options['job-hold-until'] = 'indefinite' if hold else 'no-hold'
 
     try:
         conn = get_cups_connection()
