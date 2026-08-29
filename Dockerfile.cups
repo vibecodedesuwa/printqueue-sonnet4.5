@@ -1,9 +1,12 @@
 FROM olbat/cupsd:stable-2026-07-06
 
-# The client libraries let the optional AD compose overlay use the host's
-# SSSD responder sockets without running a second domain join in this image.
+# PAM/NSS LDAP: nslcd bridges PAM and NSS lookups to an AD/LDAP server
+# without requiring a full domain join. The SSSD client libraries are kept
+# for backward compatibility with the docker-compose.ad.yml overlay.
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
-    && apt-get install -y --no-install-recommends libnss-sss libpam-sss sssd-common \
+    && apt-get install -y --no-install-recommends \
+        libnss-sss libpam-sss sssd-common \
+        nslcd libnss-ldapd libpam-ldapd \
     && pam-auth-update --package \
     && sed -i -E '/^(passwd|group|shadow):/ { /(^|[[:space:]])sss([[:space:]]|$)/! s/$/ sss/; }' /etc/nsswitch.conf \
     && rm -rf /var/lib/apt/lists/*

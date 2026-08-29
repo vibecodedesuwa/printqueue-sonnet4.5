@@ -70,6 +70,15 @@ services:
     environment:
       - CUPS_USER=${CUPS_USER:-print}
       - CUPS_PASSWORD=${CUPS_PASSWORD:-print}
+      - PRINTER_NAME=${PRINTER_NAME:-HP_Smart_Tank_515}
+      # Active Directory / LDAP — enables AD auth for IPP printing (Android/iOS)
+      - LDAP_ENABLED=${LDAP_ENABLED:-false}
+      - LDAP_HOST=${LDAP_HOST:-}
+      - LDAP_PORT=${LDAP_PORT:-389}
+      - LDAP_USE_SSL=${LDAP_USE_SSL:-false}
+      - LDAP_BASE_DN=${LDAP_BASE_DN:-}
+      - LDAP_BIND_DN=${LDAP_BIND_DN:-}
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD:-}
     healthcheck:
       test: ["CMD", "lpstat", "-r"]
       interval: 10s

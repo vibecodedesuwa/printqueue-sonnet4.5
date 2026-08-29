@@ -11,6 +11,7 @@ A modern, enterprise-grade print queue management system built with Flask, Docke
 | 🐳 **Docker-Based Deployment** | Full Docker Compose containerization for web app, CUPS spooler, and mDNS discovery                    |
 | 🔐 **Dual Authentication**     | Native support for **Authentik SSO (OpenID Connect)** and **Active Directory (LDAP)** authentication  |
 | 🔗 **AD/CUPS Identity Binding** | Automatically binds `user`, `DOMAIN\\user`, and same-domain `user@domain` print jobs to one account   |
+| 🪪 **AD-Integrated IPP**       | Android/iOS users authenticate with AD credentials at the IPP layer                                   |
 | 🌐 **Multi-Lingual (EN/TH)**   | Dynamic English 🇺🇸 & Thai 🇹🇭 language switching across all pages & modals                           |
 | 📱 **QR Mobile Quick Print**   | Scan QR code with iOS/Android camera to instantly upload documents/photos for printing                |
 | 📝 **Collabora + A4 Editors**| Full Collabora Writer integration through signed WOPI endpoints, plus a lightweight A4 fallback and direct print submission |
@@ -54,6 +55,10 @@ printqueue-sonnet4.5/
 │   ├── js/i18n.js             # Multi-lingual translation engine (EN/TH)
 │   ├── manifest.json          # PWA manifest
 │   └── sw.js                  # Service Worker
+├── scripts/
+│   ├── cups-entrypoint.sh     # Container startup script with AD/LDAP PAM configuration
+│   ├── setup-airprint.sh      # AirPrint/Mopria mDNS advertisement setup
+│   └── setup-cups-ldap.sh     # AD/LDAP PAM setup for bare-metal
 ├── docker-compose.yml         # Container orchestration (PrintQ + CUPS)
 ├── Dockerfile                 # Multi-stage Python 3.11 container definition
 ├── DOCKER_GUIDE.md            # Detailed Docker Deployment & Operations Guide
@@ -110,7 +115,7 @@ docker compose up -d --build
 | `LDAP_BIND_DN`            |                       | Service Account Bind DN                               |
 | `LDAP_BIND_PASSWORD`      |                       | Service Account password                              |
 | `LDAP_DOMAIN`             |                       | AD DNS domain used to normalize CUPS/LDAP identities  |
-| `PRINTER_NAME`            | `HP_Smart_Tank_515`   | Target CUPS printer name                              |
+| `PRINTER_NAME`            | `HP_Smart_Tank_515`   | Target CUPS printer name (must match actual CUPS printer name, e.g. `lpstat -p`) |
 | `CUPS_USER`               | `print`               | CUPS service account used by the web application      |
 | `CUPS_PASSWORD`           | `print`               | CUPS service password; change this before deployment  |
 | `COLLABORA_ENABLED`       | `false`               | Enable the Collabora Office editor                     |
@@ -127,6 +132,7 @@ docker compose up -d --build
 
 - 🐳 **[DOCKER_GUIDE.md](DOCKER_GUIDE.md)** — Comprehensive Docker deployment and container orchestration guide.
 - 📱 **[CLIENT_PRINT_GUIDE.md](CLIENT_PRINT_GUIDE.md)** — Step-by-step setup for Windows, Mac, Linux, iOS/iPadOS, and Android clients.
+- 🖥️ **[BARE_METAL_AND_LXC_GUIDE.md](BARE_METAL_AND_LXC_GUIDE.md)** — Guide for installing PrintQ on bare-metal Linux or LXC containers.
 
 ---
 

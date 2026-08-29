@@ -9,9 +9,11 @@ AirPrint is built into iOS — **no app needed**.
 1. Make sure your device is on the **same Wi-Fi network** as the print server
 2. Open any app (Photos, Safari, Files, etc.)
 3. Tap the **Share** button (⬆️) → **Print**
-4. Your printer (`HP Smart Tank 515`) should appear automatically
+4. Your printer (e.g. `YOUR_PRINTER_NAME`) should appear automatically
 5. Select it, choose options, and tap **Print**
 6. The job goes into the queue as **held** — approve it via the dashboard or kiosk
+
+> **Note on AD Authentication:** When Active Directory is enabled, AirPrint will prompt for your domain credentials.
 
 > **Not seeing the printer?** Make sure mDNS (UDP 5353) traffic is not blocked by your router/firewall.
 
@@ -34,7 +36,11 @@ Android 8+ has built-in print support via **Default Print Service**.
 2. Enable it in **Settings → Connected devices → Printing**
 3. Print from any app as above
 
-> **Job identity:** Since Android sends a generic username, your job will appear as "unclaimed" in the queue. Log into the web dashboard to **claim** your job.
+### Active Directory Authentication
+
+When AD is enabled on CUPS, the phone will prompt for your AD username/password when you print. Enter your domain credentials. The phone typically saves them for future prints.
+
+> **Job identity:** When AD is enabled, jobs are automatically bound to your AD username (no claiming needed). When AD is NOT enabled, Android sends a generic username and your job will appear as "unclaimed" in the queue. Log into the web dashboard to **claim** your job.
 
 ---
 
@@ -50,8 +56,10 @@ Android 8+ has built-in print support via **Default Print Service**.
 2. Click the **IP** tab
 3. Protocol: **IPP**
 4. Address: `your-server-ip`
-5. Queue: `/printers/HP_Smart_Tank_515`
+5. Queue: `/printers/YOUR_PRINTER_NAME`
 6. Click **Add**
+
+> **Note on AD Authentication:** When Active Directory is enabled, macOS will prompt for your domain credentials when printing.
 
 ---
 
@@ -64,14 +72,16 @@ Android 8+ has built-in print support via **Default Print Service**.
 3. Click **"The printer that I want isn't listed"**
 4. Select **"Add a printer using a TCP/IP address or hostname"**
 5. Device type: **IPP Device**
-6. Hostname or IP: `http://YOUR-SERVER-IP:631/printers/HP_Smart_Tank_515`
+6. Hostname or IP: `http://YOUR-SERVER-IP:631/printers/YOUR_PRINTER_NAME`
 7. Follow the prompts to finish setup
+
+> **Note on AD Authentication:** When Active Directory is enabled, Windows will prompt for your domain credentials when adding the printer or when you print for the first time.
 
 ### Alternatively, enable Internet Printing Client
 
 1. **Settings → Apps → Optional Features → Add a feature**
 2. Search for **"Internet Printing Client"** and install it
-3. Open **Run** (Win+R), type: `http://YOUR-SERVER-IP:631/printers/HP_Smart_Tank_515`
+3. Open **Run** (Win+R), type: `http://YOUR-SERVER-IP:631/printers/YOUR_PRINTER_NAME`
 4. Click **Connect** to add the printer
 
 ---
@@ -82,7 +92,7 @@ Android 8+ has built-in print support via **Default Print Service**.
 
 ```bash
 # Add the shared printer
-lpadmin -p PrintQ -E -v ipp://YOUR-SERVER-IP:631/printers/HP_Smart_Tank_515
+lpadmin -p PrintQ -E -v ipp://YOUR-SERVER-IP:631/printers/YOUR_PRINTER_NAME
 
 # Set as default (optional)
 lpoptions -d PrintQ
@@ -95,7 +105,9 @@ lp -d PrintQ document.pdf
 
 1. **Settings → Printers → Add Printer**
 2. The printer should appear automatically via mDNS
-3. If not, enter the URL: `ipp://YOUR-SERVER-IP:631/printers/HP_Smart_Tank_515`
+3. If not, enter the URL: `ipp://YOUR-SERVER-IP:631/printers/YOUR_PRINTER_NAME`
+
+> **Note on AD Authentication:** When Active Directory is enabled, Linux desktop environments will typically prompt for your domain credentials when adding the printer or sending a job.
 
 ---
 
@@ -104,7 +116,7 @@ lp -d PrintQ document.pdf
 No driver installation needed — works from any browser!
 
 1. Go to `http://YOUR-SERVER-IP:5000/upload`
-2. Log in with your SSO credentials
+2. Log in with your SSO or AD credentials
 3. Drag & drop or select your file (PDF, PNG, JPG, DOCX, TXT)
 4. Choose print options (copies, color, duplex)
 5. Click **Submit Print Job**
@@ -127,7 +139,7 @@ Send your documents by email — no login required!
 
 ## 🙋 Claiming Your Print Job
 
-When you print from a phone via AirPrint/Mopria, the system may not know who you are. Here's how to claim your job:
+When you print from a phone via AirPrint/Mopria, the system may not know who you are. This section is primarily for setups WITHOUT AD authentication. When AD is enabled, jobs are automatically bound to your username. If AD is not enabled, here's how to claim your job:
 
 1. Log into the **PrintQ dashboard** at `http://YOUR-SERVER-IP:5000/dashboard`
 2. Look for the **"Unclaimed Jobs"** section at the top
@@ -148,3 +160,4 @@ When you print from a phone via AirPrint/Mopria, the system may not know who you
 | "Unclaimed" job                 | Log into web dashboard and claim it                            |
 | File type not supported         | Convert to PDF first — supported: PDF, PNG, JPG, DOCX, TXT     |
 | Windows can't connect           | Ensure Internet Printing Client is enabled                     |
+| AD credential prompt not appearing | Check that LDAP_ENABLED=true and nslcd is running           |
