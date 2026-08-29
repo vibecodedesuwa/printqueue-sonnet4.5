@@ -177,6 +177,8 @@ cupsd -t
 systemctl restart cups
 ```
 
+The automated installer waits for the scheduler on `localhost:631` and displays `systemctl`/journal diagnostics if it cannot start. On systems running firewalld, it also opens IPP, mDNS, and TCP port 5000.
+
 ---
 
 ## B.3 — Install & Configure Your Printer
@@ -627,6 +629,16 @@ lpstat -p -d
 lsusb                  # for USB printers
 systemctl restart cups
 ```
+
+**`cupsctl: Host is down`:**
+```bash
+systemctl enable --now cups
+systemctl status cups --no-pager -l
+journalctl -u cups --no-pager -n 50
+lpstat -h localhost -r
+```
+
+If `lpstat -h localhost -r` works but plain `lpstat -r` does not, check `/etc/cups/client.conf` and the `CUPS_SERVER` environment variable for an old remote server setting.
 
 **AirPrint not discovered on iOS/Android:**
 ```bash

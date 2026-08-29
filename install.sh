@@ -72,7 +72,7 @@ else
     # and must not prevent the print server itself from installing.
     package_install_optional libreoffice-writer
     package_install_optional \
-        google-noto-sans-fonts google-noto-sans-thai-fonts thai-scalable-fonts-common
+        google-noto-sans-fonts google-noto-sans-thai-fonts
 fi
 
 if command -v libreoffice >/dev/null 2>&1; then
@@ -89,15 +89,82 @@ echo ""
 
 # ── Step 2: Configure CUPS Basics ──────────────────────────────────────────
 echo "🖨️ Step 2: Configuring CUPS..."
-service_enable_start cups
-cupsctl --remote-any
-cupsctl --share-printers
+
+wait_for_cups() {
+    local attempt
+    for attempt in {1..20}; do
+        if lpstat -h localhost -r >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+    done
+
+    echo "❌ The local CUPS scheduler did not become reachable on localhost:631."
+    systemctl status cups --no-pager -l || true
+    journalctl -u cups --no-pager -n 50 || true
+    return 1
+}
+
+# The supplied configuration references lpadmin on every distribution. RHEL
+# systems do not always create that group with the cups package.
+getent -s files group lpadmin >/dev/null 2>&1 || groupadd --system lpadmin
+
+# Modern CUPS reads SystemGroup from cups-files.conf, not cupsd.conf. Preserve
+# useful platform defaults while ensuring the PrintQ service group is present.
+CUPS_SYSTEM_GROUPS=lpadmin
+CUPS_FILES_BACKUP="/etc/cups/cups-files.conf.backup.$(date +%Y%m%d_%H%M%S)"
+cp -a /etc/cups/cups-files.conf "$CUPS_FILES_BACKUP"
+for cups_admin_group in root sys wheel; do
+    if getent -s files group "$cups_admin_group" >/dev/null 2>&1; then
+        CUPS_SYSTEM_GROUPS="$CUPS_SYSTEM_GROUPS $cups_admin_group"
+    fi
+done
+if grep -Eq '^[[:space:]]*SystemGroup[[:space:]]+' /etc/cups/cups-files.conf; then
+    sed -i -E "s/^[[:space:]]*SystemGroup[[:space:]]+.*/SystemGroup $CUPS_SYSTEM_GROUPS/" /etc/cups/cups-files.conf
+else
+    printf '\nSystemGroup %s\n' "$CUPS_SYSTEM_GROUPS" >> /etc/cups/cups-files.conf
+fi
 
 if [ -f "$SOURCE_DIR/config/cupsd.conf" ]; then
-    cp -a /etc/cups/cupsd.conf "/etc/cups/cupsd.conf.backup.$(date +%Y%m%d_%H%M%S)"
+    CUPS_CONFIG_BACKUP="/etc/cups/cupsd.conf.backup.$(date +%Y%m%d_%H%M%S)"
+    [ ! -f /etc/cups/cupsd.conf ] || cp -a /etc/cups/cupsd.conf "$CUPS_CONFIG_BACKUP"
     install -m 0644 "$SOURCE_DIR/config/cupsd.conf" /etc/cups/cupsd.conf
-    cupsd -t
+    if ! cupsd -t; then
+        echo "❌ The supplied CUPS configuration is invalid on this host."
+        if [ -f "$CUPS_CONFIG_BACKUP" ]; then
+            cp -a "$CUPS_CONFIG_BACKUP" /etc/cups/cupsd.conf
+            echo "   Restored the original /etc/cups/cupsd.conf"
+        fi
+        cp -a "$CUPS_FILES_BACKUP" /etc/cups/cups-files.conf
+        echo "   Restored the original /etc/cups/cups-files.conf"
+        exit 1
+    fi
+fi
+
+# Some builds expose a socket unit in addition to cups.service. Activating it
+# first avoids a startup race, while systemctl cat keeps this portable where
+# cups.socket does not exist.
+if systemctl cat cups.socket >/dev/null 2>&1; then
+    systemctl start cups.socket
+fi
+systemctl enable --now cups
+wait_for_cups
+
+# Force localhost so a pre-existing /etc/cups/client.conf or CUPS_SERVER
+# environment variable cannot redirect cupsctl to an unavailable remote host.
+if [ ! -f "$SOURCE_DIR/config/cupsd.conf" ]; then
+    cupsctl -h localhost --remote-any --share-printers
     systemctl restart cups
+    wait_for_cups
+fi
+
+# Open only the ports PrintQ requires when firewalld is already active.
+if command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+    firewall-cmd --permanent --add-port=631/tcp
+    firewall-cmd --permanent --add-port=5353/udp
+    firewall-cmd --permanent --add-port=5000/tcp
+    firewall-cmd --reload
+    echo "✅ firewalld allows IPP, mDNS, and the PrintQ web interface"
 fi
 
 echo "✅ CUPS configured"
