@@ -138,6 +138,8 @@ docker compose up -d --build
 
 The bare-metal installer supports Ubuntu, Debian, Fedora, CentOS Stream, and AlmaLinux. It automatically selects `apt-get`/`nslcd` on Debian-family systems and `dnf`/SSSD on RHEL-family systems.
 
+On EL10, LibreOffice is optional because it is no longer included in the base repositories. PrintQ still installs normally; PDF/image printing and Collabora editing work without the local LibreOffice converter.
+
 ---
 
 ## 📄 License

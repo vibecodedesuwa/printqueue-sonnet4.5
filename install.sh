@@ -66,9 +66,22 @@ else
         cups cups-client cups-devel cups-filters \
         python3 python3-pip python3-devel \
         gcc git curl nano openssl \
-        avahi avahi-tools libreoffice-writer file-libs
+        avahi avahi-tools file-libs
+    # Fedora and EL8/EL9 provide this RPM, but RHEL-compatible EL10 removed
+    # LibreOffice from the base repositories. Document conversion is optional
+    # and must not prevent the print server itself from installing.
+    package_install_optional libreoffice-writer
     package_install_optional \
         google-noto-sans-fonts google-noto-sans-thai-fonts thai-scalable-fonts-common
+fi
+
+if command -v libreoffice >/dev/null 2>&1; then
+    LOCAL_OFFICE_CONVERSION=available
+else
+    LOCAL_OFFICE_CONVERSION=unavailable
+    echo "⚠️  LibreOffice is not available from this distribution's enabled repositories."
+    echo "   PrintQ will still install, and PDF/image printing plus the Collabora editor will work."
+    echo "   Local DOC/DOCX/ODT-to-PDF conversion will remain unavailable until LibreOffice is installed."
 fi
 
 echo "✅ System dependencies installed"
@@ -433,6 +446,7 @@ echo ""
 echo "📋 Configuration Summary:"
 echo "   Printer:       $PRINTER_NAME"
 echo "   AD/LDAP Auth:  $LDAP_ENABLED"
+echo "   Local Office:  $LOCAL_OFFICE_CONVERSION"
 echo ""
 echo "📋 Next Steps:"
 echo ""

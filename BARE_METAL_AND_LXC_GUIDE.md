@@ -140,10 +140,13 @@ dnf install -y \
     cups cups-client cups-devel cups-filters \
     python3 python3-pip python3-devel \
     gcc git curl nano openssl \
-    avahi avahi-tools libreoffice-writer file-libs
+    avahi avahi-tools file-libs
 
 # Font package availability varies by enabled repositories.
 dnf install -y google-noto-sans-fonts google-noto-sans-thai-fonts || true
+
+# Optional on Fedora and EL8/EL9; this package was removed from EL10.
+dnf install -y libreoffice-writer || true
 ```
 
 > **Package notes:**
@@ -151,6 +154,8 @@ dnf install -y google-noto-sans-fonts google-noto-sans-thai-fonts || true
 > - `libreoffice-writer` — DOCX → PDF conversion for uploaded documents
 > - `fonts-noto-core` + `fonts-thai-tlwg` — reliable Thai shaping in office-to-PDF conversion
 > - `libmagic1` — File type detection for upload validation
+
+> **EL10 note:** RHEL-compatible version 10 distributions do not ship LibreOffice in their base repositories. The automated installer treats it as optional, so PDF/image printing and the Collabora editor remain available. Local DOC/DOCX/ODT-to-PDF conversion requires installing LibreOffice separately from an upstream-supported source.
 
 ---
 
