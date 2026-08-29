@@ -16,12 +16,12 @@
             <!-- Login Method Navigation Pills -->
             <ul class="nav nav-pills nav-justified mb-4" id="loginTabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active py-2" id="sso-tab" data-bs-toggle="pill" data-bs-target="#sso-panel" type="button" role="tab">
+                    <button class="nav-link {{ 'active' if initial_auth_tab != 'ad' else '' }} py-2" id="sso-tab" data-bs-toggle="pill" data-bs-target="#sso-panel" type="button" role="tab" aria-controls="sso-panel" aria-selected="{{ 'true' if initial_auth_tab != 'ad' else 'false' }}">
                         <i class="bi bi-shield-lock me-1"></i> EchoStory SSO
                     </button>
                 </li>
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link py-2" id="ad-tab" data-bs-toggle="pill" data-bs-target="#ad-panel" type="button" role="tab">
+                    <button class="nav-link {{ 'active' if initial_auth_tab == 'ad' else '' }} py-2" id="ad-tab" data-bs-toggle="pill" data-bs-target="#ad-panel" type="button" role="tab" aria-controls="ad-panel" aria-selected="{{ 'true' if initial_auth_tab == 'ad' else 'false' }}">
                         <i class="bi bi-microsoft me-1"></i> Active Directory
                     </button>
                 </li>
@@ -30,7 +30,7 @@
 
             <div class="tab-content" id="loginTabsContent">
                 <!-- Authentik SSO Panel -->
-                <div class="tab-pane fade show active text-center py-3" id="sso-panel" role="tabpanel">
+                <div class="tab-pane fade {{ 'show active' if initial_auth_tab != 'ad' else '' }} text-center py-3" id="sso-panel" role="tabpanel" aria-labelledby="sso-tab">
                     <p class="text-secondary small mb-4" data-i18n="sso_auth_title">Authenticate via Authentik Single Sign-On</p>
                     <a href="{{ url_for('web.login_sso') }}" class="btn btn-primary btn-lg w-100 py-3 d-flex align-items-center justify-content-center gap-2">
                         <i class="bi bi-box-arrow-in-right fs-5"></i>
@@ -40,15 +40,15 @@
 
                 {% if ldap_enabled %}
                 <!-- Active Directory Login Panel -->
-                <div class="tab-pane fade py-2" id="ad-panel" role="tabpanel">
+                <div class="tab-pane fade {{ 'show active' if initial_auth_tab == 'ad' else '' }} py-2" id="ad-panel" role="tabpanel" aria-labelledby="ad-tab">
                     <form action="{{ url_for('web.login_ad') }}" method="POST">
                         <div class="mb-3">
-                            <label class="form-label" data-i18n="ad_username">AD Username</label>
-                            <input type="text" name="username" class="form-control form-control-lg" placeholder="e.g. john.doe" required autocomplete="username">
+                            <label class="form-label" for="adUsername" data-i18n="ad_username">AD Username</label>
+                            <input id="adUsername" type="text" name="username" class="form-control form-control-lg" placeholder="e.g. john.doe" required autocomplete="username">
                         </div>
                         <div class="mb-4">
-                            <label class="form-label" data-i18n="ad_password">Password</label>
-                            <input type="password" name="password" class="form-control form-control-lg" placeholder="••••••••" required autocomplete="current-password">
+                            <label class="form-label" for="adPassword" data-i18n="ad_password">Password</label>
+                            <input id="adPassword" type="password" name="password" class="form-control form-control-lg" placeholder="••••••••" required autocomplete="current-password">
                         </div>
                         <button type="submit" class="btn btn-success btn-lg w-100 py-3 fw-semibold d-flex align-items-center justify-content-center gap-2">
                             <i class="bi bi-check-circle-fill"></i>

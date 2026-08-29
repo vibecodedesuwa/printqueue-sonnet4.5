@@ -20,11 +20,19 @@ def create_app(config_class=Config):
     app.config['ADMIN_GROUPS'] = config_class.ADMIN_GROUPS
     app.config['ADMIN_USERS'] = config_class.ADMIN_USERS
     app.config['PRINTER_NAME'] = config_class.PRINTER_NAME
+    app.config['LDAP_DOMAIN'] = config_class.LDAP_DOMAIN
 
     app.config['API_RATE_LIMIT'] = config_class.API_RATE_LIMIT
     app.config['UNCLAIMED_JOB_TIMEOUT_HOURS'] = config_class.UNCLAIMED_JOB_TIMEOUT_HOURS
     app.config['UPLOAD_FOLDER'] = config_class.UPLOAD_FOLDER
     app.config['ALLOWED_EXTENSIONS'] = config_class.ALLOWED_EXTENSIONS
+    app.config['COLLABORA_ENABLED'] = config_class.COLLABORA_ENABLED
+    app.config['COLLABORA_URL'] = config_class.COLLABORA_URL
+    app.config['COLLABORA_INTERNAL_URL'] = config_class.COLLABORA_INTERNAL_URL
+    app.config['COLLABORA_VERIFY_TLS'] = config_class.COLLABORA_VERIFY_TLS
+    app.config['WOPI_PUBLIC_URL'] = config_class.WOPI_PUBLIC_URL
+    app.config['WOPI_TOKEN_TTL'] = config_class.WOPI_TOKEN_TTL
+    app.config['OFFICE_FOLDER'] = config_class.OFFICE_FOLDER
 
     # Mail config
     app.config['MAIL_ENABLED'] = config_class.MAIL_ENABLED
@@ -88,15 +96,18 @@ def create_app(config_class=Config):
     # Ensure upload directory exists
     import os
     os.makedirs(config_class.UPLOAD_FOLDER, exist_ok=True)
+    os.makedirs(config_class.OFFICE_FOLDER, exist_ok=True)
 
     # Register blueprints
     from .routes.web import web_bp
     from .routes.api_v1 import api_bp
     from .routes.upload import upload_bp
+    from .routes.office import office_bp
 
     app.register_blueprint(web_bp)
     app.register_blueprint(api_bp, url_prefix='/api/v1')
     app.register_blueprint(upload_bp)
+    app.register_blueprint(office_bp)
 
     # Start email polling if enabled
     if config_class.MAIL_ENABLED:

@@ -2,17 +2,53 @@
 CUPS utility functions for Print Queue Manager
 """
 import cups
+import logging
 import os
-import tempfile
+import subprocess
+import re
 from datetime import datetime
+
+from .identity import usernames_match
 
 
 PRINTER_NAME = os.environ.get('PRINTER_NAME', 'HP_Smart_Tank_515')
+LDAP_DOMAIN = os.environ.get('LDAP_DOMAIN', '')
+logger = logging.getLogger(__name__)
 
 
 def get_cups_connection():
-    """Get CUPS connection"""
+    """Get a CUPS connection, optionally using configured service credentials."""
+    server = os.environ.get('CUPS_SERVER', '').strip()
+    user = os.environ.get('CUPS_USER', '').strip()
+    password = os.environ.get('CUPS_PASSWORD', '')
+
+    if user:
+        cups.setUser(user)
+    if password:
+        # pycups invokes this callback only if the server requests credentials.
+        cups.setPasswordCB(lambda _prompt: password)
+
+    if server:
+        host, separator, port = server.rpartition(':')
+        if separator and port.isdigit():
+            return cups.Connection(host=host, port=int(port))
+        return cups.Connection(host=server)
     return cups.Connection()
+
+
+def _same_user(left, right):
+    return usernames_match(left, right, domain=LDAP_DOMAIN)
+
+
+def _configured_printer_name():
+    """Prefer the active Flask configuration, with an environment fallback."""
+    try:
+        from flask import current_app, has_app_context
+        if has_app_context():
+            return current_app.config.get('PRINTER_NAME', PRINTER_NAME)
+    except ImportError:
+        pass
+    return PRINTER_NAME
 
 
 def get_job_state_text(state):
@@ -39,6 +75,29 @@ def get_printer_state_text(state):
     return states.get(state, 'Unknown')
 
 
+def _usable_job_name(value, job_id=None):
+    """Return a meaningful document name, rejecting common CUPS placeholders."""
+    if value is None:
+        return None
+    value = str(value).strip()
+    if not value:
+        return None
+    normalized = value.casefold()
+    generic = {'untitled', 'unknown', 'stdin', '(stdin)', 'print job', 'print_job', 'document'}
+    if normalized in generic or (job_id is not None and normalized == f'job #{job_id}'.casefold()):
+        return None
+    return value
+
+
+def _cups_job_name(job_info, job_id=None):
+    """Use all known IPP attributes because clients do not consistently set job-name."""
+    for key in ('job-name', 'document-name-supplied', 'document-name'):
+        value = _usable_job_name(job_info.get(key), job_id)
+        if value:
+            return value
+    return None
+
+
 def get_user_jobs(username=None, db=None):
     """Get all print jobs, optionally filtered by username.
     If db is provided, overlays real username from app database.
@@ -57,48 +116,50 @@ def get_user_jobs(username=None, db=None):
                 pass
 
             # Fallback: if pycups didn't return key fields, use command-line tools
-            if 'job-originating-user-name' not in job_info or 'job-name' not in job_info:
+            if 'job-originating-user-name' not in job_info or not _cups_job_name(job_info, job_id):
                 try:
-                    import subprocess
                     # Try multiple commands to find job info
                     for cmd in [
                         ['lpstat', '-o', '-l'],
                         ['lpstat', '-W', 'all', '-l'],
-                        ['lpq', '-l', '-P', PRINTER_NAME],
+                        ['lpq', '-l', '-P', _configured_printer_name()],
                     ]:
                         result = subprocess.run(
                             cmd, capture_output=True, text=True, timeout=5
                         )
-                        print(f"[LPSTAT DEBUG] cmd={' '.join(cmd)}, output={result.stdout[:300]}")
                         if result.stdout.strip():
                             # Parse for this job
-                            for line in result.stdout.split('\n'):
+                            lines = result.stdout.split('\n')
+                            for index, line in enumerate(lines):
                                 if f'-{job_id} ' in line and not line.startswith(' '):
                                     parts = line.split()
-                                    print(f"[LPSTAT DEBUG] Matched job #{job_id}: parts={parts}")
                                     if len(parts) >= 2:
                                         if 'job-originating-user-name' not in job_info:
                                             job_info['job-originating-user-name'] = parts[1]
-                                        if 'job-name' not in job_info:
-                                            job_info['job-name'] = f'Job #{job_id}'
                                 # lpq format: "username: Nth  [job N localhost]"
                                 elif f'job {job_id}' in line.lower():
                                     parts = line.split(':')
                                     if len(parts) >= 1 and parts[0].strip():
                                         user = parts[0].strip()
-                                        print(f"[LPSTAT DEBUG] lpq matched job #{job_id}: user={user}")
                                         if 'job-originating-user-name' not in job_info:
                                             job_info['job-originating-user-name'] = user
-                                        if 'job-name' not in job_info:
-                                            job_info['job-name'] = f'Job #{job_id}'
+                                        if not _cups_job_name(job_info, job_id):
+                                            for detail in lines[index + 1:]:
+                                                if not detail.strip():
+                                                    continue
+                                                candidate = re.sub(r'\s+\d+\s+bytes\s*$', '', detail.strip(), flags=re.IGNORECASE)
+                                                if _usable_job_name(candidate, job_id):
+                                                    job_info['job-name'] = candidate
+                                                break
                             if 'job-originating-user-name' in job_info:
                                 break  # Found it, stop trying commands
-                except Exception as e:
-                    print(f"[LPSTAT DEBUG] Fallback failed: {e}")
+                except Exception as exc:
+                    logger.debug("CUPS CLI fallback failed: %s", exc)
 
             # Get real username from app database if available
             display_user = job_info.get('job-originating-user-name', 'Unknown')
             submitted_via = 'ipp'
+            meta = None
             if db:
                 try:
                     meta = db.get_job_meta(job_id)
@@ -113,10 +174,26 @@ def get_user_jobs(username=None, db=None):
                 except Exception:
                     pass
 
-            if username and display_user != username:
+            cups_name = _cups_job_name(job_info, job_id)
+            metadata_name = _usable_job_name(meta.get('original_filename'), job_id) if meta else None
+            display_name = metadata_name or cups_name or f'Document #{job_id}'
+
+            # Preserve a good CUPS-supplied name locally. Later CUPS queries may omit it.
+            if db and cups_name and not metadata_name:
+                try:
+                    db.create_job_meta(
+                        job_id,
+                        submitted_via=submitted_via,
+                        original_filename=cups_name,
+                        submitted_by=meta.get('submitted_by') if meta else None,
+                    )
+                except Exception:
+                    logger.debug("Could not persist filename for CUPS job %s", job_id, exc_info=True)
+
+            if username and not _same_user(display_user, username):
                 # Also check CUPS username for backward compat
                 cups_user = job_info.get('job-originating-user-name', '')
-                if cups_user != username:
+                if not _same_user(cups_user, username):
                     continue
 
             # Handle time — could be int or datetime
@@ -128,7 +205,8 @@ def get_user_jobs(username=None, db=None):
 
             job_list.append({
                 'id': job_id,
-                'name': job_info.get('job-name', 'Untitled'),
+                'name': display_name,
+                'original_filename': metadata_name or cups_name,
                 'user': display_user,
                 'printer': job_info.get('printer-uri', '').split('/')[-1],
                 'state': job_info.get('job-state', 0),
@@ -139,10 +217,8 @@ def get_user_jobs(username=None, db=None):
             })
 
         return sorted(job_list, key=lambda x: x['time'], reverse=True)
-    except Exception as e:
-        print(f"Error getting jobs: {e}")
-        import traceback
-        traceback.print_exc()
+    except Exception:
+        logger.exception("Error getting CUPS jobs")
         return []
 
 
@@ -168,16 +244,14 @@ def _get_job_owner(conn, job_id, jobs_dict):
 
     # Fallback: parse lpstat output (same as get_user_jobs)
     try:
-        import subprocess
         result = subprocess.run(['lpstat', '-o', '-l'], capture_output=True, text=True, timeout=5)
         for line in result.stdout.split('\n'):
             if f'-{job_id} ' in line and not line.startswith(' '):
                 parts = line.split()
                 if len(parts) >= 2:
-                    print(f"[RELEASE DEBUG] lpstat matched job #{job_id}: user={parts[1]}")
                     return parts[1]
-    except Exception as e:
-        print(f"[RELEASE DEBUG] lpstat fallback failed: {e}")
+    except Exception as exc:
+        logger.debug("lpstat owner fallback failed: %s", exc)
 
     return ''
 
@@ -193,13 +267,11 @@ def release_job(job_id, username=None, is_admin=False):
 
         if username and not is_admin:
             job_user = _get_job_owner(conn, job_id, jobs)
-            print(f"[RELEASE DEBUG] job #{job_id}: job_user='{job_user}', requesting_user='{username}'")
-
             from flask import current_app
             db = current_app.config.get('db')
             
             is_authorized = False
-            if job_user == username:
+            if _same_user(job_user, username):
                 is_authorized = True
             elif db:
                 mapped_user = db.get_device_mapping(job_user)
@@ -207,8 +279,7 @@ def release_job(job_id, username=None, is_admin=False):
                 meta = db.get_job_meta(job_id)
                 submitted_by = meta.get('submitted_by') if meta else None
 
-                print(f"[RELEASE DEBUG] mapped='{mapped_user}', claimed='{claimed_user}', submitted_by='{submitted_by}'")
-                if mapped_user == username or claimed_user == username or submitted_by == username:
+                if any(_same_user(owner, username) for owner in (mapped_user, claimed_user, submitted_by)):
                     is_authorized = True
 
             if not is_authorized:
@@ -231,13 +302,11 @@ def cancel_job(job_id, username=None, is_admin=False):
 
         if username and not is_admin:
             job_user = _get_job_owner(conn, job_id, jobs)
-            print(f"[CANCEL DEBUG] job #{job_id}: job_user='{job_user}', requesting_user='{username}'")
-
             from flask import current_app
             db = current_app.config.get('db')
 
             is_authorized = False
-            if job_user == username:
+            if _same_user(job_user, username):
                 is_authorized = True
             elif db:
                 mapped_user = db.get_device_mapping(job_user)
@@ -245,7 +314,7 @@ def cancel_job(job_id, username=None, is_admin=False):
                 meta = db.get_job_meta(job_id)
                 submitted_by = meta.get('submitted_by') if meta else None
 
-                if mapped_user == username or claimed_user == username or submitted_by == username:
+                if any(_same_user(owner, username) for owner in (mapped_user, claimed_user, submitted_by)):
                     is_authorized = True
 
             if not is_authorized:
@@ -260,7 +329,7 @@ def cancel_job(job_id, username=None, is_admin=False):
 def get_printer_status(printer_name=None):
     """Get printer status"""
     if printer_name is None:
-        printer_name = PRINTER_NAME
+        printer_name = _configured_printer_name()
     try:
         conn = get_cups_connection()
         printers = conn.getPrinters()
@@ -305,7 +374,7 @@ def submit_print_job(file_path, title='Untitled', printer_name=None, options=Non
     requesting_user is stored in app DB, not in CUPS (requires root).
     """
     if printer_name is None:
-        printer_name = PRINTER_NAME
+        printer_name = _configured_printer_name()
     if options is None:
         options = {}
 
@@ -320,7 +389,7 @@ def submit_print_job(file_path, title='Untitled', printer_name=None, options=Non
         return False, str(e)
 
 
-def get_job_info(job_id):
+def get_job_info(job_id, db=None):
     """Get detailed info about a specific job"""
     try:
         conn = get_cups_connection()
@@ -330,9 +399,17 @@ def get_job_info(job_id):
             return None
 
         job_info = jobs[job_id]
+        try:
+            job_info.update(conn.getJobAttributes(job_id))
+        except Exception:
+            pass
+        meta = db.get_job_meta(job_id) if db else None
+        cups_name = _cups_job_name(job_info, job_id)
+        metadata_name = _usable_job_name(meta.get('original_filename'), job_id) if meta else None
         return {
             'id': job_id,
-            'name': job_info.get('job-name', 'Untitled'),
+            'name': metadata_name or cups_name or f'Document #{job_id}',
+            'original_filename': metadata_name or cups_name,
             'user': job_info.get('job-originating-user-name', 'Unknown'),
             'printer': job_info.get('printer-uri', '').split('/')[-1],
             'state': job_info.get('job-state', 0),

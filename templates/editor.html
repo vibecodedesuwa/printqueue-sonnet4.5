@@ -23,7 +23,7 @@
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         border-radius: 4px;
         box-sizing: border-box;
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: 'Noto Sans Thai', Tahoma, Arial, sans-serif;
     }
 
     .a4-paper [contenteditable="true"]:focus {
@@ -38,6 +38,20 @@
         border-radius: 12px;
         padding: 12px 16px;
     }
+
+    .office-launcher {
+        background: linear-gradient(135deg, rgba(37,99,235,.13), rgba(124,111,255,.08));
+        border: 1px solid rgba(96,165,250,.25);
+        border-radius: 14px;
+    }
+    .office-document-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+    .office-document {
+        display: flex; align-items: center; gap: 10px; min-width: 0;
+        padding: 12px; border-radius: 10px; color: inherit; text-decoration: none;
+        background: rgba(255,255,255,.025); border: 1px solid rgba(255,255,255,.06);
+    }
+    .office-document:hover { color: inherit; border-color: rgba(124,111,255,.35); background: rgba(124,111,255,.07); }
+    .office-document-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     @media (max-width: 768px) {
         .a4-paper {
@@ -66,11 +80,47 @@
 {% endblock %}
 
 {% block content %}
+{% if collabora_enabled %}
+<section class="office-launcher p-3 p-md-4 mb-4" aria-labelledby="officeEditorHeading">
+    <div class="d-flex flex-column flex-lg-row justify-content-between gap-3 mb-3">
+        <div>
+            <h4 id="officeEditorHeading" class="fw-bold mb-1"><i class="bi bi-window-stack text-info me-2"></i><span data-i18n="office_editor">Collabora Office Editor</span></h4>
+            <p class="text-secondary small mb-0" data-i18n="office_editor_desc">Use the complete Writer interface with reliable Thai text shaping and automatic saving.</p>
+        </div>
+        <div class="d-flex flex-column flex-sm-row gap-2">
+            <form action="{{ url_for('office.new_office_document') }}" method="POST" class="d-flex gap-2">
+                <label class="visually-hidden" for="officeTitle" data-i18n="document_title">Document title</label>
+                <input id="officeTitle" name="title" class="form-control form-control-sm" placeholder="Document title" data-i18n-placeholder="document_title" maxlength="120" {{ 'disabled' if not collabora_ready }}>
+                <button class="btn btn-primary btn-sm text-nowrap" type="submit" {{ 'disabled' if not collabora_ready }}><i class="bi bi-file-earmark-plus me-1"></i><span data-i18n="new_document">New document</span></button>
+            </form>
+            <form action="{{ url_for('office.upload_office_document') }}" method="POST" enctype="multipart/form-data">
+                <label class="btn btn-outline-info btn-sm text-nowrap mb-0 {{ 'disabled' if not collabora_ready }}" for="officeUpload"><i class="bi bi-folder2-open me-1"></i><span data-i18n="open_document">Open ODT/DOCX</span></label>
+                <input id="officeUpload" name="file" type="file" accept=".odt,.docx" class="visually-hidden" onchange="this.form.submit()" {{ 'disabled' if not collabora_ready }}>
+            </form>
+        </div>
+    </div>
+    {% if not collabora_ready %}
+    <div class="alert alert-warning py-2 mb-3" role="alert"><i class="bi bi-exclamation-triangle me-1"></i>Set <code>WOPI_PUBLIC_URL</code> to a PrintQ URL reachable from Collabora before opening documents.</div>
+    {% endif %}
+    {% if office_documents %}
+    <div class="office-document-list">
+        {% for document in office_documents %}
+        <a class="office-document" href="{{ url_for('office.edit_office_document', file_id=document.id) }}">
+            <i class="bi bi-file-earmark-word fs-4 text-info"></i>
+            <span class="office-document-name flex-grow-1"><strong>{{ document.name }}</strong><br><small class="text-body-tertiary">{{ document.modified_at[:16].replace('T', ' ') }}</small></span>
+            <i class="bi bi-chevron-right"></i>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
     <div>
         <h4 class="fw-bold mb-1 d-flex align-items-center gap-2">
             <i class="bi bi-file-earmark-text text-info"></i>
-            <span data-i18n="editor_title">Quick A4 Document Editor</span>
+            <span data-i18n="editor_title">Lightweight A4 Editor</span>
         </h4>
         <p class="text-secondary small mb-0" data-i18n="editor_subtitle">Create, format, paste images, and print A4 documents directly</p>
     </div>
@@ -104,11 +154,11 @@
     <div class="d-flex align-items-center gap-1">
         <label class="small text-secondary me-1 mb-0" data-i18n="editor_font_size">Size:</label>
         <select class="form-select form-select-sm" style="width: auto;" onchange="execCmd('fontSize', this.value)">
-            <option value="3">Normal</option>
-            <option value="4">Medium</option>
-            <option value="5">Large</option>
-            <option value="6">Heading</option>
-            <option value="7">Title</option>
+            <option value="3" data-i18n="size_normal">Normal</option>
+            <option value="4" data-i18n="size_medium">Medium</option>
+            <option value="5" data-i18n="size_large">Large</option>
+            <option value="6" data-i18n="size_heading">Heading</option>
+            <option value="7" data-i18n="size_title">Title</option>
         </select>
     </div>
 
@@ -118,7 +168,7 @@
     <input type="file" id="imgUpload" accept="image/*" class="d-none" onchange="insertImage(this)">
 
     <div class="ms-auto d-flex align-items-center gap-2">
-        <label class="small text-secondary mb-0">Copies:</label>
+        <label class="small text-secondary mb-0" for="a4Copies" data-i18n="copies">Copies:</label>
         <input type="number" id="a4Copies" class="form-control form-control-sm text-center" value="1" min="1" max="99" style="width: 60px;">
     </div>
 </div>
@@ -126,10 +176,10 @@
 <!-- A4 Canvas Area -->
 <div class="a4-container">
     <div class="a4-paper" id="a4Paper">
-        <h1 contenteditable="true" class="fw-bold mb-3 text-center" style="font-size: 24pt;" data-i18n-placeholder="editor_heading_placeholder">Quick Document</h1>
+        <h1 contenteditable="true" class="fw-bold mb-3 text-center" style="font-size: 24pt;" data-i18n-initial="editor_default_heading">Quick Document</h1>
         <hr style="border-top: 2px solid #333;" class="my-3">
-        <div contenteditable="true" id="a4Body" style="min-height: 200mm; font-size: 12pt; line-height: 1.6;" data-i18n-placeholder="editor_body_placeholder">
-            <p>Start typing your document text here...</p>
+        <div contenteditable="true" id="a4Body" style="min-height: 200mm; font-size: 12pt; line-height: 1.6;" data-i18n-initial="editor_default_body">
+            Start typing your document text here...
         </div>
     </div>
 </div>
@@ -166,6 +216,7 @@
         btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status"></span> Generating PDF...`;
 
         try {
+            if (document.fonts?.ready) await document.fonts.ready;
             const element = document.getElementById('a4Paper');
             const opt = {
                 margin: 0,

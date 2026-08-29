@@ -31,8 +31,6 @@ def is_admin():
     user_groups = [g.strip().lower() if isinstance(g, str) else str(g).lower() for g in groups]
     username = user.get('username', '').strip().lower()
 
-    print(f"[ADMIN CHECK] username='{username}', user_groups={user_groups}, admin_groups={admin_groups}, admin_users={admin_users}")
-
     return (any(group in admin_groups for group in user_groups) or
             username in admin_users)
 
@@ -112,6 +110,18 @@ def api_key_or_session(permission='read'):
                 request.api_key = None
                 request.api_key_permissions = ['read', 'write', 'admin'] if is_admin() else ['read', 'write']
                 request.rate_limit_remaining = -1
+
+                if permission == 'admin' and 'admin' not in request.api_key_permissions:
+                    return jsonify({'error': 'Insufficient permissions (admin required)'}), 403
+                if permission == 'write' and not any(
+                    item in request.api_key_permissions for item in ('write', 'admin')
+                ):
+                    return jsonify({'error': 'Insufficient permissions (write required)'}), 403
+                if permission == 'read' and not any(
+                    item in request.api_key_permissions for item in ('read', 'write', 'admin')
+                ):
+                    return jsonify({'error': 'Insufficient permissions (read required)'}), 403
+
                 return f(*args, **kwargs)
             else:
                 return jsonify({'error': 'Authentication required'}), 401
@@ -127,6 +137,8 @@ def kiosk_required(f):
     def decorated_function(*args, **kwargs):
         token = request.cookies.get('kiosk_device_token')
         if not token:
+            if getattr(request, 'path', '').startswith('/kiosk/api/'):
+                return jsonify({'error': 'Kiosk device authentication required'}), 401
             return redirect(url_for('web.kiosk_unauthorized'))
 
         db = current_app.config['db']
@@ -134,6 +146,8 @@ def kiosk_required(f):
         device = db.validate_kiosk_token(token, client_ip=client_ip)
 
         if not device:
+            if getattr(request, 'path', '').startswith('/kiosk/api/'):
+                return jsonify({'error': 'Invalid or expired kiosk device token'}), 401
             return redirect(url_for('web.kiosk_unauthorized'))
 
         # Attach device info to request context

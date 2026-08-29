@@ -2,8 +2,9 @@
 REST API v1 routes for Print Queue Manager
 Token-authenticated API for external applications.
 """
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, session
 import json
+from ..filenames import clean_display_filename, unique_storage_filename
 
 from ..auth import api_key_required, api_key_or_session
 from ..cups_utils import (
@@ -86,11 +87,11 @@ def list_unclaimed_jobs():
 @api_key_required('read')
 def get_job(job_id):
     """Get details of a specific job"""
-    job = get_job_info(job_id)
+    db = current_app.config['db']
+    job = get_job_info(job_id, db=db)
     if not job:
         return jsonify({'error': 'Job not found'}), 404
 
-    db = current_app.config['db']
     meta = db.get_job_meta(job_id)
     if meta:
         job['submitted_via'] = meta.get('submitted_via', 'ipp')
@@ -126,6 +127,9 @@ def api_cancel_job(job_id):
 @api_key_required('write')
 def api_claim_job(job_id):
     """Claim an unclaimed job"""
+    if not get_job_info(job_id, db=current_app.config['db']):
+        return jsonify({'error': 'Job not found'}), 404
+
     data = request.get_json() or {}
     username = data.get('username')
     if not username:
@@ -166,8 +170,8 @@ def api_print():
     upload_dir = current_app.config['UPLOAD_FOLDER']
     os.makedirs(upload_dir, exist_ok=True)
 
-    from werkzeug.utils import secure_filename
-    filename = secure_filename(file.filename)
+    original_filename = clean_display_filename(file.filename)
+    filename = unique_storage_filename(original_filename)
     filepath = os.path.join(upload_dir, filename)
     file.save(filepath)
 
@@ -190,12 +194,12 @@ def api_print():
 
     # Submit to CUPS
     printer_name = request.form.get('printer') or current_app.config['PRINTER_NAME']
-    success, result = submit_print_job(converted_path, filename, printer_name, options)
+    success, result = submit_print_job(converted_path, original_filename, printer_name, options)
 
     if success:
         db = current_app.config['db']
         owner = request.api_key.get('owner', 'api') if request.api_key else 'api'
-        db.create_job_meta(result, submitted_via='api', original_filename=filename, submitted_by=owner)
+        db.create_job_meta(result, submitted_via='api', original_filename=original_filename, submitted_by=owner)
 
         return jsonify({
             'success': True,
@@ -227,7 +231,7 @@ def api_list_printers():
 # ─── API Key Management (Admin) ───────────────────────────────────────
 
 @api_bp.route('/keys')
-@api_key_required('admin')
+@api_key_or_session('admin')
 def list_keys():
     """List all API keys"""
     db = current_app.config['db']
@@ -240,7 +244,7 @@ def list_keys():
 
 
 @api_bp.route('/keys', methods=['POST'])
-@api_key_required('admin')
+@api_key_or_session('admin')
 def create_key():
     """Create a new API key"""
     data = request.get_json()
@@ -248,14 +252,15 @@ def create_key():
         return jsonify({'error': 'JSON body required'}), 400
 
     name = data.get('name')
-    owner = data.get('owner', request.api_key.get('owner', 'admin'))
+    default_owner = request.api_key.get('owner', 'admin') if request.api_key else session.get('user', {}).get('username', 'admin')
+    owner = data.get('owner') or default_owner
     permissions = data.get('permissions', ['read'])
 
     if not name:
         return jsonify({'error': 'name is required'}), 400
 
     valid_perms = {'read', 'write', 'admin'}
-    if not all(p in valid_perms for p in permissions):
+    if not isinstance(permissions, list) or not permissions or not all(p in valid_perms for p in permissions):
         return jsonify({'error': f'Invalid permissions. Valid: {valid_perms}'}), 400
 
     db = current_app.config['db']
@@ -271,7 +276,7 @@ def create_key():
 
 
 @api_bp.route('/keys/<int:key_id>', methods=['DELETE'])
-@api_key_required('admin')
+@api_key_or_session('admin')
 def revoke_key(key_id):
     """Revoke an API key"""
     db = current_app.config['db']
@@ -346,4 +351,3 @@ def delete_email(email):
     db = current_app.config['db']
     db.delete_email_mapping(email)
     return jsonify({'success': True})
-

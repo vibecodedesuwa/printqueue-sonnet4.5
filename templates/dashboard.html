@@ -3,7 +3,7 @@
 
 {% block content %}
 <!-- Navigation -->
-<ul class="nav nav-pills mb-3">
+<ul class="nav nav-pills section-nav mb-3">
     <li class="nav-item"><a class="nav-link active" href="{{ url_for('web.dashboard') }}"><i class="bi bi-grid me-1"></i><span data-i18n="my_print_jobs">My Jobs</span></a></li>
     {% if is_admin %}
     <li class="nav-item"><a class="nav-link" href="{{ url_for('web.admin') }}"><i class="bi bi-gear me-1"></i><span data-i18n="admin_panel">Admin</span></a></li>
@@ -15,15 +15,15 @@
 <!-- Printer Status -->
 <div class="status-bar d-flex justify-content-between align-items-center px-3 py-2 mb-3">
     <div class="d-flex align-items-center gap-2" style="font-size: 13px;">
-        <span class="status-dot online" id="statusDot"></span>
+        <span class="status-dot checking" id="statusDot"></span>
         <span id="statusText">Checking printer...</span>
     </div>
-    <span class="live-indicator"><span class="live-dot"></span> Live</span>
+    <span class="live-indicator" id="connectionState"><span class="live-dot" id="connectionDot"></span><span id="connectionText">Connecting</span></span>
 </div>
 
 <!-- Unclaimed Jobs Section -->
 <div id="unclaimedSection" class="mb-4" style="display: none;">
-    <div class="d-flex justify-content-between align-items-center mb-2">
+    <div class="section-heading d-flex justify-content-between align-items-center mb-2">
         <h6 class="mb-0 fw-semibold"><i class="bi bi-bell me-1 text-warning"></i><span data-i18n="unclaimed_jobs">Unclaimed Jobs Pool</span> <span class="count-badge" style="background: #ffc048;" id="unclaimedCount">0</span></h6>
         <small class="text-body-tertiary" data-i18n="claim_desc">Tap "Claim" if it's yours</small>
     </div>
@@ -44,7 +44,12 @@
     <h6 class="mb-0 fw-semibold"><i class="bi bi-file-earmark-text me-1"></i><span data-i18n="my_print_jobs">My Jobs</span> <span class="count-badge" id="myJobsCount">0</span></h6>
 </div>
 
-<div id="myJobsContent">
+<div class="empty-state py-4" id="loadingState">
+    <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"><span class="visually-hidden">Loading</span></div>
+    <div class="small text-body-tertiary">Loading your print queue…</div>
+</div>
+
+<div id="myJobsContent" style="display: none;">
     <!-- Desktop -->
     <div class="table-responsive-wrapper">
         <table class="table table-hover mb-0">
@@ -69,31 +74,33 @@
     const POLL_INTERVAL = 5000;
     let prevJobIds = new Set();
     let prevUnclaimedIds = new Set();
+    let refreshing = false;
+    let refreshErrorShown = false;
 
     // ─── Render helpers ─────────────────────────────────────
     function badgeHtml(stateText) {
         const map = { held: 'primary', pending: 'warning', processing: 'success', completed: 'secondary', canceled: 'danger' };
         const cls = map[(stateText || '').toLowerCase()] || 'secondary';
-        return `<span class="badge bg-${cls} bg-opacity-25 text-${cls}">${stateText}</span>`;
+        return `<span class="badge bg-${cls} bg-opacity-25 text-${cls}">${escapeHtml(stateText || 'Unknown')}</span>`;
     }
 
     function actionBtns(job) {
         let h = '';
         if ([3, 4].includes(job.state))
-            h += `<button onclick="releaseJob(${job.id})" class="btn btn-success btn-sm"><i class="bi bi-check-lg me-1"></i><span class="d-none d-lg-inline">Release</span></button>`;
+            h += `<button data-job-action="${job.id}" onclick="releaseJob(${job.id})" class="btn btn-success btn-sm" aria-label="${escapeHtml(t('release_print', 'Release'))} #${job.id}"><i class="bi bi-check-lg me-1"></i><span class="d-none d-lg-inline">${escapeHtml(t('release_print', 'Release'))}</span></button>`;
         if (![7, 8, 9].includes(job.state))
-            h += `<button onclick="cancelJob(${job.id})" class="btn btn-danger btn-sm ms-1"><i class="bi bi-x-lg me-1"></i><span class="d-none d-lg-inline">Cancel</span></button>`;
+            h += `<button data-job-action="${job.id}" onclick="cancelJob(${job.id})" class="btn btn-danger btn-sm ms-1" aria-label="${escapeHtml(t('cancel', 'Cancel'))} #${job.id}"><i class="bi bi-x-lg me-1"></i><span class="d-none d-lg-inline">${escapeHtml(t('cancel', 'Cancel'))}</span></button>`;
         return h;
     }
 
     function renderRow(job, isNew) {
         return `<tr class="${isNew ? 'fade-in' : ''}" data-job-id="${job.id}">
             <td><strong>#${job.id}</strong></td>
-            <td class="text-truncate" style="max-width: 200px;">${job.name || 'Untitled'}</td>
+            <td class="text-truncate" style="max-width: 200px;" title="${escapeHtml(job.name || 'Untitled')}">${escapeHtml(job.name || 'Untitled')}</td>
             <td>${badgeHtml(job.state_text)}</td>
             <td>${job.pages > 0 ? job.pages : '—'}</td>
             <td>${job.size} KB</td>
-            <td><small class="text-body-tertiary">${job.time}</small></td>
+            <td><small class="text-body-tertiary">${escapeHtml(job.time)}</small></td>
             <td>${actionBtns(job)}</td>
         </tr>`;
     }
@@ -101,13 +108,13 @@
     function renderCard(job, isNew) {
         return `<div class="job-card ${isNew ? 'fade-in' : ''}" data-job-id="${job.id}">
             <div class="job-card-header">
-                <span class="job-card-title">#${job.id} — ${job.name || 'Untitled'}</span>
+                <span class="job-card-title">#${job.id} — ${escapeHtml(job.name || 'Untitled')}</span>
                 ${badgeHtml(job.state_text)}
             </div>
             <div class="job-card-meta">
                 <span><i class="bi bi-file-earmark"></i> ${job.pages > 0 ? job.pages : '—'} pg</span>
                 <span><i class="bi bi-hdd"></i> ${job.size} KB</span>
-                <span><i class="bi bi-clock"></i> ${job.time}</span>
+                <span><i class="bi bi-clock"></i> ${escapeHtml(job.time)}</span>
             </div>
             <div class="job-card-actions">${actionBtns(job)}</div>
         </div>`;
@@ -116,26 +123,26 @@
     function renderUnclaimedRow(job, isNew) {
         return `<tr class="${isNew ? 'fade-in' : ''}" style="border-left: 3px solid #ffc048;">
             <td><strong>#${job.id}</strong></td>
-            <td>${job.name || 'Untitled'}</td>
-            <td>${job.user}</td>
+            <td>${escapeHtml(job.name || 'Untitled')}</td>
+            <td>${escapeHtml(job.user || 'Unknown')}</td>
             <td><span class="badge bg-warning bg-opacity-25 text-warning">Unclaimed</span></td>
-            <td><small class="text-body-tertiary">${job.time}</small></td>
-            <td><button onclick="claimJob(${job.id})" class="btn btn-warning btn-sm"><i class="bi bi-hand-index me-1"></i>Claim</button></td>
+            <td><small class="text-body-tertiary">${escapeHtml(job.time)}</small></td>
+            <td><button data-job-action="${job.id}" onclick="claimJob(${job.id})" class="btn btn-warning btn-sm"><i class="bi bi-hand-index me-1"></i>${escapeHtml(t('claim_job', 'Claim'))}</button></td>
         </tr>`;
     }
 
     function renderUnclaimedCard(job, isNew) {
         return `<div class="job-card unclaimed ${isNew ? 'fade-in' : ''}" data-job-id="${job.id}">
             <div class="job-card-header">
-                <span class="job-card-title">#${job.id} — ${job.name || 'Untitled'}</span>
+                <span class="job-card-title">#${job.id} — ${escapeHtml(job.name || 'Untitled')}</span>
                 <span class="badge bg-warning bg-opacity-25 text-warning">Unclaimed</span>
             </div>
             <div class="job-card-meta">
-                <span><i class="bi bi-phone"></i> ${job.user}</span>
-                <span><i class="bi bi-clock"></i> ${job.time}</span>
+                <span><i class="bi bi-phone"></i> ${escapeHtml(job.user || 'Unknown')}</span>
+                <span><i class="bi bi-clock"></i> ${escapeHtml(job.time)}</span>
             </div>
             <div class="job-card-actions">
-                <button onclick="claimJob(${job.id})" class="btn btn-warning btn-sm"><i class="bi bi-hand-index me-1"></i>Claim</button>
+                <button data-job-action="${job.id}" onclick="claimJob(${job.id})" class="btn btn-warning btn-sm"><i class="bi bi-hand-index me-1"></i>${escapeHtml(t('claim_job', 'Claim'))}</button>
             </div>
         </div>`;
     }
@@ -143,6 +150,7 @@
     // ─── Update DOM ──────────────────────────────────────────
     function updateMyJobs(jobs) {
         const newIds = new Set(jobs.map(j => j.id));
+        document.getElementById('loadingState').style.display = 'none';
         document.getElementById('myJobsCount').textContent = jobs.length;
 
         if (jobs.length === 0) {
@@ -174,10 +182,15 @@
         prevUnclaimedIds = newIds;
     }
 
-    function updatePrinterStatus() {
-        fetch('{{ url_for("web.api_printer_status") }}')
-            .then(r => r.json())
-            .then(data => {
+    function setConnectionState(online) {
+        document.getElementById('connectionText').textContent = online ? 'Live' : 'Offline';
+        document.getElementById('connectionState').style.color = online ? '#00d9a6' : '#ff4757';
+        document.getElementById('connectionDot').style.background = online ? '#00d9a6' : '#ff4757';
+    }
+
+    async function updatePrinterStatus() {
+        try {
+            const data = await Api.request('{{ url_for("web.api_printer_status") }}');
                 const dot = document.getElementById('statusDot');
                 const text = document.getElementById('statusText');
                 if (data.error) {
@@ -187,25 +200,47 @@
                     dot.className = data.state === 3 ? 'status-dot online' : 'status-dot offline';
                     text.textContent = data.name + ' — ' + data.state_text;
                 }
-            })
-            .catch(() => {
-                document.getElementById('statusDot').className = 'status-dot offline';
-                document.getElementById('statusText').textContent = '⚠️ Unable to reach printer';
-            });
+            setConnectionState(true);
+        } catch (error) {
+            document.getElementById('statusDot').className = 'status-dot offline';
+            document.getElementById('statusText').textContent = 'Unable to reach printer';
+            setConnectionState(false);
+        }
     }
 
     // ─── Polling ─────────────────────────────────────────────
-    function refreshAll() {
-        fetch('{{ url_for("web.api_jobs") }}')
-            .then(r => r.json()).then(updateMyJobs).catch(console.error);
-        fetch('{{ url_for("web.api_unclaimed_jobs") }}')
-            .then(r => r.json()).then(updateUnclaimed).catch(console.error);
+    async function refreshAll() {
+        if (refreshing || document.hidden) return;
+        refreshing = true;
+        try {
+            const [jobs, unclaimed] = await Promise.all([
+                Api.request('{{ url_for("web.api_jobs") }}'),
+                Api.request('{{ url_for("web.api_unclaimed_jobs") }}')
+            ]);
+            updateMyJobs(jobs);
+            updateUnclaimed(unclaimed);
+            setConnectionState(true);
+            refreshErrorShown = false;
+        } catch (error) {
+            setConnectionState(false);
+            if (!refreshErrorShown) Toast.error(error.message);
+            refreshErrorShown = true;
+        } finally {
+            refreshing = false;
+        }
     }
 
     refreshAll();
     updatePrinterStatus();
     setInterval(refreshAll, POLL_INTERVAL);
     setInterval(updatePrinterStatus, 15000);
+
+    function setJobBusy(jobId, busy) {
+        document.querySelectorAll(`[data-job-action="${jobId}"]`).forEach(button => {
+            button.disabled = busy;
+            button.setAttribute('aria-busy', String(busy));
+        });
+    }
 
     // ─── Job Actions ─────────────────────────────────────────
     async function releaseJob(jobId) {
@@ -216,12 +251,13 @@
             type: 'success'
         });
         if (!ok) return;
+        setJobBusy(jobId, true);
         try {
-            const r = await fetch(`/api/job/${jobId}/release`, { method: 'POST' });
-            const data = await r.json();
-            if (data.success) { Toast.success('Job released for printing!'); refreshAll(); }
-            else Toast.error(data.error || data.message || 'Failed to release job');
-        } catch (e) { Toast.error('Network error: ' + e.message); }
+            await Api.request(`/api/job/${jobId}/release`, { method: 'POST' });
+            Toast.success(t('job_released_success', 'Job released for printing!'));
+            await refreshAll();
+        } catch (e) { Toast.error(e.message); }
+        finally { setJobBusy(jobId, false); }
     }
 
     async function cancelJob(jobId) {
@@ -232,21 +268,23 @@
             type: 'danger'
         });
         if (!ok) return;
+        setJobBusy(jobId, true);
         try {
-            const r = await fetch(`/api/job/${jobId}/cancel`, { method: 'POST' });
-            const data = await r.json();
-            if (data.success) { Toast.success('Job cancelled'); refreshAll(); }
-            else Toast.error(data.error || data.message || 'Failed to cancel job');
-        } catch (e) { Toast.error('Network error: ' + e.message); }
+            await Api.request(`/api/job/${jobId}/cancel`, { method: 'POST' });
+            Toast.success(t('job_cancelled_success', 'Job cancelled'));
+            await refreshAll();
+        } catch (e) { Toast.error(e.message); }
+        finally { setJobBusy(jobId, false); }
     }
 
     async function claimJob(jobId) {
+        setJobBusy(jobId, true);
         try {
-            const r = await fetch(`/api/job/${jobId}/claim`, { method: 'POST' });
-            const data = await r.json();
-            if (data.success) { Toast.success('Job claimed! It will appear in your jobs.'); refreshAll(); }
-            else Toast.warning(data.message || 'Could not claim this job');
-        } catch (e) { Toast.error('Network error: ' + e.message); }
+            await Api.request(`/api/job/${jobId}/claim`, { method: 'POST' });
+            Toast.success(t('job_claimed_success', 'Job claimed!'));
+            await refreshAll();
+        } catch (e) { Toast.error(e.message); }
+        finally { setJobBusy(jobId, false); }
     }
 </script>
 {% endblock %}

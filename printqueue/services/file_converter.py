@@ -10,6 +10,7 @@ import shutil
 CONVERTIBLE_TYPES = {
     'docx': 'pdf',
     'doc': 'pdf',
+    'odt': 'pdf',
     'txt': 'pdf',
 }
 

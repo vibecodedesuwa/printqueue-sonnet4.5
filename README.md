@@ -10,9 +10,10 @@ A modern, enterprise-grade print queue management system built with Flask, Docke
 | ----------------------------- | ----------------------------------------------------------------------------------------------------- |
 | 🐳 **Docker-Based Deployment** | Full Docker Compose containerization for web app, CUPS spooler, and mDNS discovery                    |
 | 🔐 **Dual Authentication**     | Native support for **Authentik SSO (OpenID Connect)** and **Active Directory (LDAP)** authentication  |
+| 🔗 **AD/CUPS Identity Binding** | Automatically binds `user`, `DOMAIN\\user`, and same-domain `user@domain` print jobs to one account   |
 | 🌐 **Multi-Lingual (EN/TH)**   | Dynamic English 🇺🇸 & Thai 🇹🇭 language switching across all pages & modals                           |
 | 📱 **QR Mobile Quick Print**   | Scan QR code with iOS/Android camera to instantly upload documents/photos for printing                |
-| 📝 **A4 Quick Document Editor**| Built-in rich text A4 editor with live paper preview (210mm x 297mm) and direct PDF print submission  |
+| 📝 **Collabora + A4 Editors**| Full Collabora Writer integration through signed WOPI endpoints, plus a lightweight A4 fallback and direct print submission |
 | 🤖 **Android & iOS Support**   | AirPrint & Mopria / IPP support for smartphones and tablets (iOS, iPadOS, Android)                    |
 | 🙋 **Claim & Release System**  | Unclaimed job pool with fixed owner authorization for AirPrint, Mopria, Web Upload, and Email jobs    |
 | 💻 **Kiosk Mode**             | Touch-optimized terminal UI secured with long-lived device token authentication                       |
@@ -77,7 +78,7 @@ cp .env.example .env
 ### 2. Start Containers
 
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ### 3. Access Web Services
@@ -86,7 +87,7 @@ docker-compose up -d --build
 | -------------------------------- | -------------------------------------------- |
 | `http://localhost:5000`          | Landing & Login Page                         |
 | `http://localhost:5000/dashboard`| User Dashboard & Print Queue                 |
-| `http://localhost:5000/editor`   | A4 Quick Document Editor                     |
+| `http://localhost:5000/editor`   | Collabora Office + lightweight A4 editor     |
 | `http://localhost:5000/qr-upload`| Mobile QR Code Quick Print                   |
 | `http://localhost:5000/kiosk`    | Kiosk Mode (Device token authenticated)       |
 | `http://localhost:5000/api/docs` | Interactive Swagger API Documentation        |
@@ -108,7 +109,15 @@ docker-compose up -d --build
 | `LDAP_BASE_DN`            |                       | Active Directory Base DN (e.g. `DC=domain,DC=local`)   |
 | `LDAP_BIND_DN`            |                       | Service Account Bind DN                               |
 | `LDAP_BIND_PASSWORD`      |                       | Service Account password                              |
+| `LDAP_DOMAIN`             |                       | AD DNS domain used to normalize CUPS/LDAP identities  |
 | `PRINTER_NAME`            | `HP_Smart_Tank_515`   | Target CUPS printer name                              |
+| `CUPS_USER`               | `print`               | CUPS service account used by the web application      |
+| `CUPS_PASSWORD`           | `print`               | CUPS service password; change this before deployment  |
+| `COLLABORA_ENABLED`       | `false`               | Enable the Collabora Office editor                     |
+| `COLLABORA_URL`           |                       | Browser-facing Collabora URL                           |
+| `COLLABORA_INTERNAL_URL`  |                       | Optional LAN URL used to fetch Collabora discovery     |
+| `WOPI_PUBLIC_URL`         |                       | PrintQ URL reachable from the Collabora container      |
+| `WOPI_TOKEN_TTL`          | `14400`               | Signed WOPI editor-token lifetime in seconds           |
 | `ADMIN_GROUPS`            | `admins,print-admins` | Admin group names (comma-separated)                   |
 | `ADMIN_USERS`             | `admin`               | Admin usernames (comma-separated)                     |
 

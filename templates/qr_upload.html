@@ -42,7 +42,7 @@
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
         border-radius: 4px;
         box-sizing: border-box;
-        font-family: Arial, Helvetica, sans-serif;
+        font-family: 'Noto Sans Thai', Tahoma, Arial, sans-serif;
         font-size: 14px;
     }
 
@@ -167,10 +167,10 @@
                     <!-- A4 Mobile Paper Preview -->
                     <div class="a4-mobile-container mb-3">
                         <div class="a4-mobile-paper" id="mobileA4Paper">
-                            <h2 contenteditable="true" class="fw-bold mb-2 text-center" style="font-size: 18px;" data-i18n-placeholder="editor_heading_placeholder">Document Title</h2>
+                            <h2 contenteditable="true" class="fw-bold mb-2 text-center" style="font-size: 18px;" data-i18n-initial="editor_default_heading">Quick Document</h2>
                             <hr class="my-2" style="border-top: 1.5px solid #444;">
-                            <div contenteditable="true" id="mobileA4Body" style="min-height: 140mm; font-size: 13px; line-height: 1.5;" data-i18n-placeholder="editor_body_placeholder">
-                                <p>Type text here or insert images to print directly...</p>
+                            <div contenteditable="true" id="mobileA4Body" style="min-height: 140mm; font-size: 13px; line-height: 1.5;" data-i18n-initial="editor_default_body">
+                                Start typing your document text here...
                             </div>
                         </div>
                     </div>
@@ -226,6 +226,7 @@
         btn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status"></span>`;
 
         try {
+            if (document.fonts?.ready) await document.fonts.ready;
             const element = document.getElementById('mobileA4Paper');
             const opt = {
                 margin: 0,

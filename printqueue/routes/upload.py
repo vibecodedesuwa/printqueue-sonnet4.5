@@ -3,11 +3,11 @@ File upload routes for Print Queue Manager
 Handles web-based file upload and print submission.
 """
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash, current_app, session
-from werkzeug.utils import secure_filename
 import os
 
 from ..auth import login_required, is_admin
 from ..cups_utils import submit_print_job
+from ..filenames import clean_display_filename, unique_storage_filename
 
 upload_bp = Blueprint('upload', __name__)
 
@@ -45,7 +45,8 @@ def upload_file():
         return redirect(url_for('upload.upload_page') if 'user' in session else url_for('web.qr_upload_page'))
 
     # Save uploaded file
-    filename = secure_filename(file.filename)
+    original_filename = clean_display_filename(file.filename)
+    filename = unique_storage_filename(original_filename)
     upload_dir = current_app.config['UPLOAD_FOLDER']
     os.makedirs(upload_dir, exist_ok=True)
     filepath = os.path.join(upload_dir, filename)
@@ -71,11 +72,11 @@ def upload_file():
     # Submit to CUPS
     printer_name = current_app.config['PRINTER_NAME']
     username = session.get('user', {}).get('username')
-    success, result = submit_print_job(converted_path, filename, printer_name, options, requesting_user=username)
+    success, result = submit_print_job(converted_path, original_filename, printer_name, options, requesting_user=username)
 
     if success:
         db = current_app.config['db']
-        db.create_job_meta(result, submitted_via='qr_mobile' if not username else 'web', original_filename=filename, submitted_by=username)
+        db.create_job_meta(result, submitted_via='qr_mobile' if not username else 'web', original_filename=original_filename, submitted_by=username)
         if username:
             flash(f'✅ Job #{result} submitted! It will print once approved.', 'success')
             return redirect(url_for('web.dashboard'))

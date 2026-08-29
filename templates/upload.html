@@ -31,7 +31,7 @@
 
 {% block content %}
 <!-- Navigation -->
-<ul class="nav nav-pills mb-3">
+<ul class="nav nav-pills section-nav mb-3">
     <li class="nav-item"><a class="nav-link" href="{{ url_for('web.dashboard') }}"><i class="bi bi-grid me-1"></i>My Jobs</a></li>
     {% if is_admin %}
     <li class="nav-item"><a class="nav-link" href="{{ url_for('web.admin') }}"><i class="bi bi-gear me-1"></i>Admin</a></li>
@@ -41,7 +41,7 @@
 
 <form method="POST" enctype="multipart/form-data" id="uploadForm">
     <!-- Drop zone -->
-    <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <div class="upload-zone" id="dropZone" role="button" tabindex="0" aria-controls="fileInput" aria-label="Choose a document to print">
         <div class="icon"><i class="bi bi-cloud-arrow-up" style="font-size: 48px; color: var(--pq-accent);"></i></div>
         <h5>Drop file here or tap to browse</h5>
         <p class="text-body-tertiary mb-0" style="font-size: 13px;">PDF, PNG, JPG, DOCX, DOC, TXT — Max 50 MB</p>
@@ -62,19 +62,19 @@
     <!-- Print options -->
     <div class="row g-3 mb-4">
         <div class="col-6 col-md-3">
-            <label class="form-label">Copies</label>
-            <input type="number" name="copies" min="1" max="99" value="1" class="form-control">
+            <label class="form-label" for="copies">Copies</label>
+            <input id="copies" type="number" name="copies" min="1" max="99" value="1" class="form-control">
         </div>
         <div class="col-6 col-md-3">
-            <label class="form-label">Color</label>
-            <select name="color" class="form-select">
+            <label class="form-label" for="colorMode">Color</label>
+            <select id="colorMode" name="color" class="form-select">
                 <option value="color">🎨 Color</option>
                 <option value="bw">⬛ B&W</option>
             </select>
         </div>
         <div class="col-6 col-md-3">
-            <label class="form-label">Page Range</label>
-            <input type="text" name="page_range" placeholder="e.g. 1-5, 8" class="form-control">
+            <label class="form-label" for="pageRange">Page Range</label>
+            <input id="pageRange" type="text" name="page_range" placeholder="e.g. 1-5, 8" class="form-control" inputmode="numeric">
         </div>
         <div class="col-6 col-md-3 d-flex align-items-end">
             <div class="form-check mb-2">
@@ -97,6 +97,14 @@
     const preview = document.getElementById('filePreview');
     const submitBtn = document.getElementById('submitBtn');
 
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            fileInput.click();
+        }
+    });
+
     // Drag & drop
     ['dragenter', 'dragover'].forEach(e => dropZone.addEventListener(e, (ev) => {
         ev.preventDefault(); dropZone.classList.add('dragover');
@@ -114,6 +122,17 @@
     });
 
     function showPreview(file) {
+        const allowed = /\.(pdf|png|jpe?g|docx?|txt)$/i;
+        if (!allowed.test(file.name)) {
+            Toast.error('Unsupported file type. Choose PDF, PNG, JPG, DOCX, DOC, or TXT.');
+            clearFile();
+            return;
+        }
+        if (file.size > 50 * 1024 * 1024) {
+            Toast.error('This file is larger than the 50 MB upload limit.');
+            clearFile();
+            return;
+        }
         document.getElementById('fileName').textContent = file.name;
         document.getElementById('fileSize').textContent = (file.size / (1024 * 1024)).toFixed(2) + ' MB';
         preview.classList.add('active');

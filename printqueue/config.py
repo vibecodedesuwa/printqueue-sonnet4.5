@@ -62,3 +62,12 @@ class Config:
     # File Upload
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'data/uploads')
     ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'docx', 'doc', 'txt'}
+
+    # Collabora Online / WOPI
+    COLLABORA_ENABLED = os.environ.get('COLLABORA_ENABLED', 'false').lower() == 'true'
+    COLLABORA_URL = os.environ.get('COLLABORA_URL', '').rstrip('/')
+    COLLABORA_INTERNAL_URL = os.environ.get('COLLABORA_INTERNAL_URL', '').rstrip('/')
+    COLLABORA_VERIFY_TLS = os.environ.get('COLLABORA_VERIFY_TLS', 'true').lower() == 'true'
+    WOPI_PUBLIC_URL = os.environ.get('WOPI_PUBLIC_URL', '').rstrip('/')
+    WOPI_TOKEN_TTL = int(os.environ.get('WOPI_TOKEN_TTL', 14400))
+    OFFICE_FOLDER = os.environ.get('OFFICE_FOLDER', 'data/office')

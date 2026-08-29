@@ -2,6 +2,38 @@
 
 {% block title %}PrintQ — Enterprise Print Queue Management{% endblock %}
 
+{% block extra_css %}
+<style>
+    .landing-cta .btn {
+        min-width: 280px;
+        justify-content: center;
+    }
+    .feature-card {
+        background: rgba(18, 18, 31, 0.6);
+        border-radius: 16px;
+    }
+    .feature-icon {
+        width: 48px;
+        height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 48px;
+        padding: 0;
+        line-height: 1;
+    }
+    .feature-icon .bi {
+        display: block;
+        line-height: 1;
+    }
+    @media (max-width: 575.98px) {
+        .landing-cta,
+        .landing-cta .btn { width: 100%; }
+        .landing-cta .btn { min-width: 0; }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row align-items-center justify-content-center py-4">
     <div class="col-lg-10 text-center">
@@ -21,17 +53,17 @@
         </p>
 
         <!-- CTA Login Action Buttons -->
-        <div class="d-flex flex-column flex-sm-row align-items-center justify-content-center gap-3 mb-5">
-            <a href="{{ url_for('web.login') }}" class="btn btn-primary btn-lg px-4 py-3 shadow-lg d-flex align-items-center gap-2">
+        <div class="landing-cta d-flex flex-column flex-sm-row align-items-center justify-content-center gap-3 mb-5">
+            <a href="{{ url_for('web.login_sso') }}" class="btn btn-primary btn-lg px-4 py-3 shadow-lg d-flex align-items-center gap-2">
                 <i class="bi bi-shield-lock-fill fs-5"></i>
                 <span data-i18n="login_with_echostory">Login with EchoStory</span>
             </a>
             
             {% if ldap_enabled %}
-            <button type="button" class="btn btn-outline-light btn-lg px-4 py-3 d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#adLoginModal">
+            <a href="{{ url_for('web.login', tab='ad') }}" class="btn btn-outline-light btn-lg px-4 py-3 d-flex align-items-center gap-2">
                 <i class="bi bi-microsoft fs-5 text-info"></i>
                 <span data-i18n="login_with_ad">Login with Active Directory</span>
-            </button>
+            </a>
             {% endif %}
 
 
@@ -42,8 +74,8 @@
 <!-- Enterprise Features Grid -->
 <div class="row g-4 mt-2">
     <div class="col-md-4">
-        <div class="card h-100 p-4" style="background: rgba(18, 18, 31, 0.6); border: 1px solid rgba(124, 111, 255, 0.15); border-radius: 16px;">
-            <div class="rounded-3 p-3 mb-3 d-inline-block" style="background: rgba(124, 111, 255, 0.1); width: 48px; height: 48px; text-align: center;">
+        <div class="card feature-card h-100 p-4" style="border-color: rgba(124, 111, 255, 0.15);">
+            <div class="feature-icon rounded-3 mb-3" style="background: rgba(124, 111, 255, 0.1);">
                 <i class="bi bi-phone-vibrate text-primary fs-4"></i>
             </div>
             <h5 class="fw-bold mb-2">Cross-Platform Support</h5>
@@ -52,18 +84,18 @@
     </div>
 
     <div class="col-md-4">
-        <div class="card h-100 p-4" style="background: rgba(18, 18, 31, 0.6); border: 1px solid rgba(0, 217, 166, 0.15); border-radius: 16px;">
-            <div class="rounded-3 p-3 mb-3 d-inline-block" style="background: rgba(0, 217, 166, 0.1); width: 48px; height: 48px; text-align: center;">
+        <div class="card feature-card h-100 p-4" style="border-color: rgba(0, 217, 166, 0.15);">
+            <div class="feature-icon rounded-3 mb-3" style="background: rgba(0, 217, 166, 0.1);">
                 <i class="bi bi-fingerprint text-success fs-4"></i>
             </div>
             <h5 class="fw-bold mb-2">Dual Auth & Security</h5>
-            <p class="text-secondary small mb-0">Integrated with Active Directory (LDAP) & Authentik OIDC SSO for seamless identity verification and group permissions.</p>
+            <p class="text-secondary small mb-0">Sign in with Active Directory or Authentik. AD-authenticated CUPS jobs are automatically linked to the matching account.</p>
         </div>
     </div>
 
     <div class="col-md-4">
-        <div class="card h-100 p-4" style="background: rgba(18, 18, 31, 0.6); border: 1px solid rgba(255, 192, 72, 0.15); border-radius: 16px;">
-            <div class="rounded-3 p-3 mb-3 d-inline-block" style="background: rgba(255, 192, 72, 0.1); width: 48px; height: 48px; text-align: center;">
+        <div class="card feature-card h-100 p-4" style="border-color: rgba(255, 192, 72, 0.15);">
+            <div class="feature-icon rounded-3 mb-3" style="background: rgba(255, 192, 72, 0.1);">
                 <i class="bi bi-file-earmark-text text-warning fs-4"></i>
             </div>
             <h5 class="fw-bold mb-2">A4 Quick Tools</h5>
@@ -72,36 +104,4 @@
     </div>
 </div>
 
-{% if ldap_enabled %}
-<!-- Active Directory Login Modal -->
-<div class="modal fade" id="adLoginModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <form action="{{ url_for('web.login_ad') }}" method="POST">
-                <div class="modal-header">
-                    <h5 class="modal-title d-flex align-items-center gap-2">
-                        <i class="bi bi-microsoft text-info"></i>
-                        <span data-i18n="ad_auth_title">Active Directory Login</span>
-                    </h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body py-4">
-                    <div class="mb-3">
-                        <label class="form-label" data-i18n="ad_username">AD Username</label>
-                        <input type="text" name="username" class="form-control" placeholder="e.g. john.doe" required autocomplete="username">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label" data-i18n="ad_password">Password</label>
-                        <input type="password" name="password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
-                    </div>
-                </div>
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal" data-i18n="qr_close">Cancel</button>
-                    <button type="submit" class="btn btn-primary btn-sm px-4" data-i18n="login_btn">Log In</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-{% endif %}
 {% endblock %}

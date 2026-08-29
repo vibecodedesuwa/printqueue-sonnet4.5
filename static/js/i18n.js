@@ -69,8 +69,20 @@ const translations = {
         submit_print_job: "Submit Print Job",
 
         // A4 Quick Editor
-        editor_title: "Quick A4 Document Editor",
+        editor_title: "Lightweight A4 Editor",
         editor_subtitle: "Create, format, paste images, and print A4 documents directly",
+        office_editor: "Collabora Office Editor",
+        office_editor_desc: "Use the complete Writer interface with reliable Thai text shaping and automatic saving.",
+        new_document: "New document",
+        open_document: "Open ODT/DOCX",
+        document_title: "Document title",
+        size_normal: "Normal",
+        size_medium: "Medium",
+        size_large: "Large",
+        size_heading: "Heading",
+        size_title: "Title",
+        editor_default_heading: "Quick Document",
+        editor_default_body: "Start typing your document text here...",
         editor_heading_placeholder: "Enter Document Heading...",
         editor_body_placeholder: "Type your text content here...",
         editor_font_size: "Font Size",
@@ -179,8 +191,20 @@ const translations = {
         submit_print_job: "ส่งงานพิมพ์เข้าคิว",
 
         // A4 Quick Editor
-        editor_title: "เครื่องมือสร้างและพิมพ์เอกสาร A4 ด่วน",
+        editor_title: "เครื่องมือแก้ไข A4 แบบเบา",
         editor_subtitle: "สร้างข้อความ ใส่รูปภาพ จัดรูปแบบ และสั่งพิมพ์เอกสารขนาด A4 ได้ทันที",
+        office_editor: "เครื่องมือแก้ไข Collabora Office",
+        office_editor_desc: "ใช้ Writer แบบเต็มรูปแบบ รองรับการจัดรูปอักษรไทยและบันทึกอัตโนมัติ",
+        new_document: "สร้างเอกสารใหม่",
+        open_document: "เปิดไฟล์ ODT/DOCX",
+        document_title: "ชื่อเอกสาร",
+        size_normal: "ปกติ",
+        size_medium: "กลาง",
+        size_large: "ใหญ่",
+        size_heading: "หัวข้อ",
+        size_title: "ชื่อเรื่อง",
+        editor_default_heading: "เอกสารด่วน",
+        editor_default_body: "เริ่มพิมพ์เนื้อหาเอกสารที่นี่...",
         editor_heading_placeholder: "กรอกหัวข้อเอกสาร...",
         editor_body_placeholder: "พิมพ์เนื้อหาเอกสารของคุณที่นี่...",
         editor_font_size: "ขนาดตัวอักษร",
@@ -241,6 +265,7 @@ function setLanguage(lang) {
     document.cookie = `pq_lang=${lang}; path=/; max-age=31536000; SameSite=Lax`;
 
     const dict = translations[lang];
+    document.documentElement.lang = lang;
 
     // Translate elements with data-i18n attribute
     document.querySelectorAll('[data-i18n]').forEach(el => {
@@ -255,6 +280,16 @@ function setLanguage(lang) {
         const key = el.getAttribute('data-i18n-placeholder');
         if (dict[key]) {
             el.placeholder = dict[key];
+        }
+    });
+
+    // Translate starter content until the user edits it; never overwrite their work.
+    document.querySelectorAll('[data-i18n-initial]').forEach(el => {
+        const key = el.getAttribute('data-i18n-initial');
+        if (!el.dataset.userEdited && dict[key]) el.textContent = dict[key];
+        if (!el.dataset.i18nBound) {
+            el.addEventListener('input', () => { el.dataset.userEdited = 'true'; });
+            el.dataset.i18nBound = 'true';
         }
     });
 

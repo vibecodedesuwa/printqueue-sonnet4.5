@@ -5,9 +5,14 @@ Handles dashboard, admin, kiosk, login/logout, and API docs.
 from flask import Blueprint, render_template, redirect, url_for, session, request, flash, jsonify, current_app
 
 from ..auth import login_required, is_admin, kiosk_required
-from ..cups_utils import get_user_jobs, get_all_jobs, release_job, cancel_job, get_printer_status
+from ..cups_utils import get_user_jobs, get_all_jobs, get_job_info, release_job, cancel_job, get_printer_status
+from ..identity import usernames_match
 
 web_bp = Blueprint('web', __name__)
+
+
+def _same_user(left, right):
+    return usernames_match(left, right, domain=current_app.config.get('LDAP_DOMAIN', ''))
 
 
 # ─── Authentication & Landing ──────────────────────────────────────────
@@ -28,7 +33,11 @@ def landing():
 def login():
     if 'user' in session:
         return redirect(url_for('web.dashboard'))
-    return render_template('login.html', user=None)
+    return render_template(
+        'login.html',
+        user=None,
+        initial_auth_tab='ad' if request.args.get('tab') == 'ad' else 'sso',
+    )
 
 
 @web_bp.route('/login/sso')
@@ -36,9 +45,12 @@ def login_sso():
     """Trigger Authentik OAuth authorization redirect."""
     if 'user' in session:
         return redirect(url_for('web.dashboard'))
+    import secrets
+    oauth_state = secrets.token_urlsafe(32)
+    session['oauth_state'] = oauth_state
     redirect_uri = url_for('web.authorize', _external=True)
     authentik = current_app.config['authentik']
-    return authentik.authorize_redirect(redirect_uri)
+    return authentik.authorize_redirect(redirect_uri, state=oauth_state)
 
 
 @web_bp.route('/login/ad', methods=['POST'])
@@ -49,30 +61,12 @@ def login_ad():
 
     if not username or not password:
         flash('Username and password are required', 'error')
-        return redirect(url_for('web.login'))
+        return redirect(url_for('web.login', tab='ad'))
 
     ad_auth = current_app.config.get('ad_auth')
     if not ad_auth or not ad_auth.is_configured():
-        # Fallback for demonstration / local testing when AD server isn't live:
-        # Check against ADMIN_USERS or allow valid username if configured
-        config = current_app.config
-        admin_users = config.get('ADMIN_USERS', ['admin'])
-        if isinstance(admin_users, str):
-            admin_users = admin_users.split(',')
-        admin_users = [u.strip().lower() for u in admin_users]
-
-        if username.lower() in admin_users and password:
-            session['user'] = {
-                'username': username,
-                'email': f"{username}@domain.local",
-                'name': username.capitalize(),
-                'groups': ['admins']
-            }
-            flash(f"Welcome, {session['user']['name']}! (Local Auth)", 'success')
-            return redirect(url_for('web.dashboard'))
-
         flash('Active Directory server is not configured or reachable. Check LDAP settings in .env', 'error')
-        return redirect(url_for('web.login'))
+        return redirect(url_for('web.login', tab='ad'))
 
     user_info = ad_auth.authenticate(username, password)
     if user_info:
@@ -80,20 +74,33 @@ def login_ad():
             'username': user_info['username'],
             'email': user_info.get('email', ''),
             'name': user_info.get('name', username),
-            'groups': user_info.get('groups', [])
+            'groups': user_info.get('groups', []),
+            'auth_type': 'ad',
         }
         flash(f"Welcome, {session['user']['name']}! (AD Auth)", 'success')
         return redirect(url_for('web.dashboard'))
 
     flash('Invalid Active Directory username or password', 'error')
-    return redirect(url_for('web.login'))
+    return redirect(url_for('web.login', tab='ad'))
 
 
 @web_bp.route('/editor')
 @login_required
 def editor_page():
-    """Render the simple A4 document editor"""
-    return render_template('editor.html', user=session['user'], is_admin=is_admin())
+    """Render the Collabora launcher and lightweight A4 fallback."""
+    from .office import list_office_documents
+    collabora_enabled = bool(
+        current_app.config.get('COLLABORA_ENABLED')
+        and current_app.config.get('COLLABORA_URL')
+    )
+    return render_template(
+        'editor.html',
+        user=session['user'],
+        is_admin=is_admin(),
+        collabora_enabled=collabora_enabled,
+        collabora_ready=collabora_enabled and bool(current_app.config.get('WOPI_PUBLIC_URL')),
+        office_documents=list_office_documents(session['user']['username']) if collabora_enabled else [],
+    )
 
 
 @web_bp.route('/qr-upload')
@@ -105,7 +112,18 @@ def qr_upload_page():
 @web_bp.route('/authorize')
 def authorize():
     try:
+        import hmac
         import requests as http_req
+
+        expected_state = session.pop('oauth_state', None)
+        received_state = request.args.get('state', '')
+        if not expected_state or not hmac.compare_digest(expected_state, received_state):
+            flash('Invalid or expired login request. Please try again.', 'error')
+            return redirect(url_for('web.login'))
+
+        if request.args.get('error'):
+            flash('Single sign-on was canceled or denied', 'error')
+            return redirect(url_for('web.login'))
 
         code = request.args.get('code')
         if not code:
@@ -127,7 +145,7 @@ def authorize():
             'redirect_uri': url_for('web.authorize', _external=True),
             'client_id': Config.AUTHENTIK_CLIENT_ID,
             'client_secret': Config.AUTHENTIK_CLIENT_SECRET,
-        })
+        }, timeout=15)
 
         if token_resp.status_code != 200:
             print(f"[AUTH ERROR] Token exchange failed: {token_resp.status_code} {token_resp.text}")
@@ -145,15 +163,19 @@ def authorize():
         # Fetch userinfo using access token
         userinfo_resp = http_req.get(userinfo_endpoint, headers={
             'Authorization': f'Bearer {access_token}'
-        })
+        }, timeout=15)
+        if userinfo_resp.status_code != 200:
+            flash('Failed to get user information', 'error')
+            return redirect(url_for('web.login'))
         user_info = userinfo_resp.json()
 
-        if user_info and user_info.get('preferred_username') or user_info.get('email'):
+        if user_info and (user_info.get('preferred_username') or user_info.get('email')):
             session['user'] = {
                 'username': user_info.get('preferred_username') or user_info.get('email'),
                 'email': user_info.get('email'),
                 'name': user_info.get('name', user_info.get('preferred_username', 'User')),
-                'groups': user_info.get('groups', [])
+                'groups': user_info.get('groups', []),
+                'auth_type': 'sso',
             }
             # Store id_token for RP-Initiated Logout
             if token_data.get('id_token'):
@@ -223,18 +245,18 @@ def dashboard():
 
         # Check if this CUPS user is mapped to current user via KnownDevice
         mapped_user = db.get_device_mapping(cups_user)
-        if mapped_user == username:
+        if _same_user(mapped_user, username) or _same_user(cups_user, username):
             my_jobs_from_devices.append(job)
             continue
 
         # Check if it's unclaimed
         if job['id'] in unclaimed_job_ids:
             unclaimed_jobs.append(job)
-        elif not mapped_user and cups_user != username:
+        elif not mapped_user and not _same_user(cups_user, username):
             # Unknown user, not yet in our tracking — add to meta as unclaimed
             meta = db.get_job_meta(job['id'])
             if not meta:
-                db.create_job_meta(job['id'], submitted_via='ipp', submitted_by=cups_user)
+                db.create_job_meta(job['id'], submitted_via='ipp')
                 unclaimed_jobs.append(job)
 
     # Combine user's own jobs + device-mapped jobs
@@ -296,14 +318,14 @@ def api_unclaimed_jobs():
     for job in all_jobs:
         cups_user = job['user']
         mapped_user = db.get_device_mapping(cups_user)
-        if mapped_user == username:
+        if _same_user(mapped_user, username) or _same_user(cups_user, username):
             continue
         if job['id'] in unclaimed_job_ids:
             unclaimed_jobs.append(job)
-        elif not mapped_user and cups_user != username:
+        elif not mapped_user and not _same_user(cups_user, username):
             meta = db.get_job_meta(job['id'])
             if not meta:
-                db.create_job_meta(job['id'], submitted_via='ipp', submitted_by=cups_user)
+                db.create_job_meta(job['id'], submitted_via='ipp')
                 unclaimed_jobs.append(job)
     return jsonify(unclaimed_jobs)
 
@@ -312,13 +334,8 @@ def api_unclaimed_jobs():
 @login_required
 def api_release_job(job_id):
     username = session['user']['username']
-    db = current_app.config['db']
 
-    # Check if user claimed this job
-    claimed_owner = db.get_claimed_owner(job_id)
-    effective_user = claimed_owner or username
-
-    success, message, status = release_job(job_id, effective_user, is_admin())
+    success, message, status = release_job(job_id, username, is_admin())
     return jsonify({'success': success, 'message' if success else 'error': message}), status if not success else 200
 
 
@@ -326,12 +343,8 @@ def api_release_job(job_id):
 @login_required
 def api_cancel_job(job_id):
     username = session['user']['username']
-    db = current_app.config['db']
 
-    claimed_owner = db.get_claimed_owner(job_id)
-    effective_user = claimed_owner or username
-
-    success, message, status = cancel_job(job_id, effective_user, is_admin())
+    success, message, status = cancel_job(job_id, username, is_admin())
     return jsonify({'success': success, 'message' if success else 'error': message}), status if not success else 200
 
 
@@ -340,6 +353,8 @@ def api_cancel_job(job_id):
 def api_claim_job(job_id):
     username = session['user']['username']
     db = current_app.config['db']
+    if not get_job_info(job_id, db=current_app.config['db']):
+        return jsonify({'success': False, 'message': 'Job not found'}), 404
     success, message = db.claim_job(job_id, username)
     return jsonify({'success': success, 'message': message}), 200 if success else 409
 

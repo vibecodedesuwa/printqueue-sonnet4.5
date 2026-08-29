@@ -7,6 +7,8 @@ RUN apt-get update && apt-get install -y \
     libcups2-dev \
     gcc \
     libreoffice-writer \
+    fonts-noto-core \
+    fonts-thai-tlwg \
     libmagic1 \
     libldap2-dev \
     libsasl2-dev \

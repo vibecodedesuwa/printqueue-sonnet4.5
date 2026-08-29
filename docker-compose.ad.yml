@@ -1,0 +1,7 @@
+# Optional overlay for a Linux Docker host that is already joined to AD with SSSD.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.ad.yml up -d --build
+services:
+  cups:
+    volumes:
+      - /var/lib/sss/pipes:/var/lib/sss/pipes
+      - /etc/krb5.conf:/etc/krb5.conf:ro

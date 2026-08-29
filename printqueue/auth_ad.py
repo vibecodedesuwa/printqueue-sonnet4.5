@@ -10,7 +10,8 @@ logger = logging.getLogger(__name__)
 
 try:
     import ldap3
-    from ldap3 import Server, Connection, ALL, NTLM, SIMPLE
+    from ldap3 import Server, Connection, ALL, SIMPLE
+    from ldap3.utils.conv import escape_filter_chars
     LDAP3_AVAILABLE = True
 except ImportError:
     LDAP3_AVAILABLE = False
@@ -50,11 +51,26 @@ class ActiveDirectoryAuth:
             return None
 
         username = username.strip()
+        # The configured filter normally targets sAMAccountName, so search with
+        # the account portion even when the login was DOMAIN\user or a UPN.
+        search_username = username.rsplit('\\', 1)[-1].split('@', 1)[0].strip()
+        if not search_username:
+            return None
 
+        conn = None
+        admin_conn = None
         try:
-            protocol = 'ldaps' if self.use_ssl else 'ldap'
-            server_url = f"{protocol}://{self.host}:{self.port}"
-            server = Server(server_url, get_info=ALL)
+            base_dn = self.base_dn
+            if not base_dn and self.domain:
+                base_dn = ','.join([f"DC={part}" for part in self.domain.split('.')])
+
+            server = Server(
+                self.host,
+                port=self.port,
+                use_ssl=self.use_ssl,
+                get_info=ALL,
+                connect_timeout=10,
+            )
 
             # Determine bind format
             user_principal = username
@@ -80,9 +96,11 @@ class ActiveDirectoryAuth:
                         authentication=SIMPLE,
                         auto_bind=True
                     )
-                    search_filter = self.user_search_filter.format(username=username)
+                    search_filter = self.user_search_filter.format(
+                        username=escape_filter_chars(search_username)
+                    )
                     admin_conn.search(
-                        search_base=self.base_dn,
+                        search_base=base_dn,
                         search_filter=search_filter,
                         attributes=['dn', 'displayName', 'mail', 'memberOf', 'sAMAccountName', 'userPrincipalName']
                     )
@@ -91,6 +109,7 @@ class ActiveDirectoryAuth:
                         user_entry = admin_conn.entries[0]
                         user_dn = user_entry.entry_dn
                         # Retry bind with resolved user DN
+                        conn.unbind()
                         conn = Connection(
                             server,
                             user=user_dn,
@@ -109,18 +128,17 @@ class ActiveDirectoryAuth:
                     return None
 
             # User authenticated! Fetch user attributes and group memberships.
-            search_filter = self.user_search_filter.format(username=username)
-            if not self.base_dn and self.domain:
-                # Construct base DN from domain (e.g. company.local -> DC=company,DC=local)
-                self.base_dn = ','.join([f"DC={part}" for part in self.domain.split('.')])
-
+            search_filter = self.user_search_filter.format(
+                username=escape_filter_chars(search_username)
+            )
             groups: List[str] = []
-            display_name = username
-            email = f"{username}@{self.domain}" if self.domain else ""
+            canonical_name = search_username
+            display_name = search_username
+            email = f"{search_username}@{self.domain}" if self.domain else ""
 
-            if self.base_dn:
+            if base_dn:
                 conn.search(
-                    search_base=self.base_dn,
+                    search_base=base_dn,
                     search_filter=search_filter,
                     attributes=['displayName', 'mail', 'memberOf', 'cn', 'sAMAccountName']
                 )
@@ -131,6 +149,8 @@ class ActiveDirectoryAuth:
                         display_name = str(entry.displayName)
                     if hasattr(entry, 'mail') and entry.mail:
                         email = str(entry.mail)
+                    if hasattr(entry, 'sAMAccountName') and entry.sAMAccountName:
+                        canonical_name = str(entry.sAMAccountName)
 
                     if hasattr(entry, 'memberOf') and entry.memberOf:
                         # Extract group CNs from memberOf DN strings
@@ -139,18 +159,27 @@ class ActiveDirectoryAuth:
                             if match:
                                 groups.append(match.group(1))
 
-            conn.unbind()
-
             user_info = {
-                'username': username,
+                'username': canonical_name,
                 'name': display_name,
                 'email': email,
                 'groups': groups,
                 'auth_type': 'ad'
             }
-            logger.info(f"[AD Auth] User '{username}' authenticated successfully via AD.")
+            logger.info(f"[AD Auth] User '{canonical_name}' authenticated successfully via AD.")
             return user_info
 
         except Exception as e:
             logger.error(f"[AD Auth] Exception during authentication for '{username}': {e}")
             return None
+        finally:
+            if admin_conn is not None:
+                try:
+                    admin_conn.unbind()
+                except Exception:
+                    pass
+            if conn is not None:
+                try:
+                    conn.unbind()
+                except Exception:
+                    pass

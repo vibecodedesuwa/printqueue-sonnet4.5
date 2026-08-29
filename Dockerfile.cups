@@ -1,0 +1,18 @@
+FROM olbat/cupsd:stable-2026-07-06
+
+# The client libraries let the optional AD compose overlay use the host's
+# SSSD responder sockets without running a second domain join in this image.
+RUN DEBIAN_FRONTEND=noninteractive apt-get update \
+    && apt-get install -y --no-install-recommends libnss-sss libpam-sss sssd-common \
+    && pam-auth-update --package \
+    && sed -i -E '/^(passwd|group|shadow):/ { /(^|[[:space:]])sss([[:space:]]|$)/! s/$/ sss/; }' /etc/nsswitch.conf \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY config/cupsd.conf /etc/cups/cupsd.conf
+COPY scripts/cups-entrypoint.sh /usr/local/bin/cups-entrypoint
+COPY scripts/setup-airprint.sh /usr/local/bin/setup-airprint
+
+RUN chmod 0755 /usr/local/bin/cups-entrypoint /usr/local/bin/setup-airprint
+
+ENTRYPOINT ["/usr/local/bin/cups-entrypoint"]
+CMD ["/usr/sbin/cupsd", "-f"]

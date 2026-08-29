@@ -91,6 +91,8 @@ apt install -y \
     avahi-daemon \
     avahi-utils \
     libreoffice-writer \
+    fonts-noto-core \
+    fonts-thai-tlwg \
     libmagic1
 ```
 
@@ -98,6 +100,7 @@ apt install -y \
 >
 > - `avahi-daemon` + `avahi-utils` — AirPrint/Mopria device discovery via mDNS
 > - `libreoffice-writer` — DOCX → PDF conversion for uploaded documents
+> - `fonts-noto-core` + `fonts-thai-tlwg` — reliable Thai shaping in office-to-PDF conversion
 > - `libmagic1` — File type detection for upload validation
 
 ### 2.2 Configure CUPS
@@ -127,25 +130,9 @@ systemctl start avahi-daemon
 ### 2.4 Configure CUPS to Hold All Jobs by Default
 
 ```bash
-# Edit CUPS configuration
-nano /etc/cups/cupsd.conf
-
-# Find the line "<Limit All>" and add this policy:
-# Add this section before </Location>
-
-<Location />
-  Order allow,deny
-  Allow all
-</Location>
-
-<Policy default>
-  <Limit Send-Document Send-URI Hold-Job Release-Job Restart-Job Purge-Jobs Set-Job-Attributes Create-Job-Subscription Renew-Subscription Cancel-Subscription Get-Subscription-Attributes Get-Subscriptions Get-Notifications Cancel-Jobs Get-Job-Attributes All>
-    Require user @SYSTEM
-    Order deny,allow
-  </Limit>
-</Policy>
-
-# Save and restart CUPS
+# Install the supplied policy (the installer does this automatically)
+cp /opt/print-queue-manager/config/cupsd.conf /etc/cups/cupsd.conf
+cupsd -t
 systemctl restart cups
 ```
 
@@ -185,7 +172,9 @@ hp-setup -i
 
 ```bash
 # Set printer to hold all jobs by default
-lpadmin -p HP_Smart_Tank_515 -o job-hold-until=indefinite
+lpadmin -p HP_Smart_Tank_515 \
+  -o job-hold-until-default=indefinite \
+  -o printer-op-policy=authenticated
 
 # Enable printer sharing for AirPrint
 lpadmin -p HP_Smart_Tank_515 -o printer-is-shared=true
@@ -372,6 +361,15 @@ UNCLAIMED_JOB_TIMEOUT=24
 # Database & Uploads
 DATABASE_PATH=data/printqueue.db
 UPLOAD_FOLDER=data/uploads
+OFFICE_FOLDER=data/office
+
+# Collabora Office (optional)
+COLLABORA_ENABLED=true
+COLLABORA_URL=https://office.toonshou.in
+COLLABORA_INTERNAL_URL=http://172.16.0.9:9980
+# Must be reachable from the Collabora/TrueNAS container; never use localhost here.
+WOPI_PUBLIC_URL=https://printq.your-domain.com
+WOPI_TOKEN_TTL=14400
 ```
 
 **Important:** Replace all placeholder values with your actual credentials.

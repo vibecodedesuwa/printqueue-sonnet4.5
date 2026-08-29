@@ -16,12 +16,22 @@ echo "🖨️  Setting up AirPrint/IPP Everywhere for printer: $PRINTER_NAME"
 # ─── 1. Configure CUPS for network sharing ────────────────────────────
 echo "📝 Configuring CUPS..."
 
-cupsctl --share-printers
-cupsctl WebInterface=yes
-cupsctl --remote-any
+if ! lpstat -r >/dev/null 2>&1; then
+    echo "❌ CUPS is not running or cannot be reached." >&2
+    exit 1
+fi
 
-# Enable printer sharing for the specific printer
-lpadmin -p "$PRINTER_NAME" -o printer-is-shared=true 2>/dev/null || true
+# Make authentication and holding properties part of the queue itself. CUPS
+# does not use a named policy until printer-op-policy is explicitly assigned.
+if ! lpstat -p "$PRINTER_NAME" >/dev/null 2>&1; then
+    echo "❌ Printer '$PRINTER_NAME' does not exist in CUPS." >&2
+    echo "   Add it first, then run this script again." >&2
+    exit 1
+fi
+lpadmin -p "$PRINTER_NAME" \
+    -o printer-is-shared=true \
+    -o printer-op-policy=authenticated \
+    -o job-hold-until-default=indefinite
 
 # ─── 2. Generate Avahi service file for AirPrint ──────────────────────
 echo "📡 Generating Avahi mDNS service file..."

@@ -3,7 +3,7 @@
 
 {% block content %}
 <!-- Navigation -->
-<ul class="nav nav-pills mb-3">
+<ul class="nav nav-pills section-nav mb-3">
     <li class="nav-item"><a class="nav-link" href="{{ url_for('web.dashboard') }}"><i class="bi bi-grid me-1"></i>Dashboard</a></li>
     <li class="nav-item"><a class="nav-link active" href="{{ url_for('web.admin') }}"><i class="bi bi-gear me-1"></i>Admin</a></li>
     <li class="nav-item"><a class="nav-link" href="{{ url_for('web.kiosk_entry') }}"><i class="bi bi-phone me-1"></i>Kiosk</a></li>
@@ -11,7 +11,7 @@
 </ul>
 
 <!-- Sub Tabs -->
-<ul class="nav nav-pills nav-fill mb-3" id="adminTabs" role="tablist">
+<ul class="nav nav-pills nav-fill page-tabs mb-3" id="adminTabs" role="tablist">
     <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-jobs"><i class="bi bi-printer me-1"></i>All Jobs</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-apikeys"><i class="bi bi-key me-1"></i>API Keys</button></li>
     <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-devices"><i class="bi bi-phone me-1"></i>Devices</button></li>
@@ -285,21 +285,21 @@
     function badgeHtml(stateText) {
         const map = { held: 'primary', pending: 'warning', processing: 'success', completed: 'secondary', canceled: 'danger' };
         const cls = map[(stateText || '').toLowerCase()] || 'secondary';
-        return `<span class="badge bg-${cls} bg-opacity-25 text-${cls}">${stateText}</span>`;
+        return `<span class="badge bg-${cls} bg-opacity-25 text-${cls}">${escapeHtml(stateText || 'Unknown')}</span>`;
     }
 
     function renderAdminRow(job, isNew) {
         let acts = '';
-        if ([3,4].includes(job.state)) acts += `<button onclick="releaseJob(${job.id})" class="btn btn-success btn-sm"><i class="bi bi-check-lg"></i></button>`;
-        if (![7,8,9].includes(job.state)) acts += `<button onclick="cancelJob(${job.id})" class="btn btn-danger btn-sm ms-1"><i class="bi bi-x-lg"></i></button>`;
+        if ([3,4].includes(job.state)) acts += `<button onclick="releaseJob(${job.id})" class="btn btn-success btn-sm" aria-label="Release job #${job.id}" title="Release job"><i class="bi bi-check-lg"></i></button>`;
+        if (![7,8,9].includes(job.state)) acts += `<button onclick="cancelJob(${job.id})" class="btn btn-danger btn-sm ms-1" aria-label="Cancel job #${job.id}" title="Cancel job"><i class="bi bi-x-lg"></i></button>`;
         return `<tr class="${isNew ? 'fade-in' : ''}" data-job-id="${job.id}">
             <td><strong>#${job.id}</strong></td>
-            <td>${job.user || 'Unknown'}</td>
-            <td class="text-truncate" style="max-width: 180px;">${job.name || 'Untitled'}</td>
+            <td>${escapeHtml(job.user || 'Unknown')}</td>
+            <td class="text-truncate" style="max-width: 180px;" title="${escapeHtml(job.name || 'Untitled')}">${escapeHtml(job.name || 'Untitled')}</td>
             <td>${badgeHtml(job.state_text)}</td>
             <td>${job.pages > 0 ? job.pages : '—'}</td>
             <td>${job.size} KB</td>
-            <td><small class="text-body-tertiary">${job.time}</small></td>
+            <td><small class="text-body-tertiary">${escapeHtml(job.time)}</small></td>
             <td>${acts}</td>
         </tr>`;
     }
@@ -310,14 +310,14 @@
         if (![7,8,9].includes(job.state)) acts += `<button onclick="cancelJob(${job.id})" class="btn btn-danger btn-sm"><i class="bi bi-x-lg me-1"></i>Cancel</button>`;
         return `<div class="job-card ${isNew ? 'fade-in' : ''}" data-job-id="${job.id}">
             <div class="job-card-header">
-                <span class="job-card-title">#${job.id} — ${job.name || 'Untitled'}</span>
+                <span class="job-card-title">#${job.id} — ${escapeHtml(job.name || 'Untitled')}</span>
                 ${badgeHtml(job.state_text)}
             </div>
             <div class="job-card-meta">
-                <span><i class="bi bi-person"></i> ${job.user || 'Unknown'}</span>
+                <span><i class="bi bi-person"></i> ${escapeHtml(job.user || 'Unknown')}</span>
                 <span><i class="bi bi-file-earmark"></i> ${job.pages > 0 ? job.pages : '—'} pg</span>
                 <span><i class="bi bi-hdd"></i> ${job.size} KB</span>
-                <span><i class="bi bi-clock"></i> ${job.time}</span>
+                <span><i class="bi bi-clock"></i> ${escapeHtml(job.time)}</span>
             </div>
             <div class="job-card-actions">${acts}</div>
         </div>`;
@@ -340,9 +340,12 @@
         prevAdminJobIds = newIds;
     }
 
-    function refreshAdminJobs() {
-        fetch('{{ url_for("web.api_jobs") }}?all=true')
-            .then(r => r.json()).then(updateAdminJobs).catch(console.error);
+    async function refreshAdminJobs() {
+        try {
+            updateAdminJobs(await Api.request('{{ url_for("web.api_jobs") }}?all=true'));
+        } catch (error) {
+            Toast.error(error.message);
+        }
     }
 
     refreshAdminJobs();
@@ -353,20 +356,18 @@
         const ok = await confirmAction({ title: 'Release Job', message: `Release job #${jobId}?`, confirmText: 'Release', type: 'success' });
         if (!ok) return;
         try {
-            const r = await fetch(`/api/job/${jobId}/release`, { method: 'POST' });
-            const d = await r.json();
-            if (d.success) { Toast.success('Job released'); refreshAdminJobs(); } else Toast.error(d.error);
-        } catch (e) { Toast.error('Error: ' + e.message); }
+            await Api.request(`/api/job/${jobId}/release`, { method: 'POST' });
+            Toast.success('Job released'); refreshAdminJobs();
+        } catch (e) { Toast.error(e.message); }
     }
 
     async function cancelJob(jobId) {
         const ok = await confirmAction({ title: 'Cancel Job', message: `Cancel job #${jobId}? This cannot be undone.`, confirmText: 'Cancel Job', type: 'danger' });
         if (!ok) return;
         try {
-            const r = await fetch(`/api/job/${jobId}/cancel`, { method: 'POST' });
-            const d = await r.json();
-            if (d.success) { Toast.success('Job cancelled'); refreshAdminJobs(); } else Toast.error(d.error);
-        } catch (e) { Toast.error('Error: ' + e.message); }
+            await Api.request(`/api/job/${jobId}/cancel`, { method: 'POST' });
+            Toast.success('Job cancelled'); refreshAdminJobs();
+        } catch (e) { Toast.error(e.message); }
     }
 
     // ─── API Keys ────────────────────────────────────────────
@@ -380,12 +381,11 @@
         if (!name) { Toast.warning('Key name is required'); return; }
 
         try {
-            const r = await fetch('/api/v1/keys', {
+            const data = await Api.request('/api/v1/keys', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer session' },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, owner, permissions })
             });
-            const data = await r.json();
             if (data.key) {
                 document.getElementById('newKeyForm').classList.add('d-none');
                 document.getElementById('newKeyResult').classList.remove('d-none');
@@ -394,17 +394,17 @@
             } else {
                 Toast.error(data.error || 'Failed to create key');
             }
-        } catch (e) { Toast.error('Error: ' + e.message); }
+        } catch (e) { Toast.error(e.message); }
     }
 
     async function revokeKey(keyId) {
         const ok = await confirmAction({ title: 'Revoke Key', message: 'Revoke this API key? It will stop working immediately.', confirmText: 'Revoke', type: 'danger' });
         if (!ok) return;
         try {
-            await fetch(`/api/v1/keys/${keyId}`, { method: 'DELETE', headers: { 'Authorization': 'Bearer session' } });
+            await Api.request(`/api/v1/keys/${keyId}`, { method: 'DELETE' });
             Toast.success('Key revoked');
             location.reload();
-        } catch (e) { Toast.error('Error: ' + e.message); }
+        } catch (e) { Toast.error(e.message); }
     }
 
     // ─── Device Mapping ──────────────────────────────────────
@@ -413,20 +413,20 @@
         const auth = document.getElementById('devAuthUser').value;
         if (!cups || !auth) { Toast.warning('Both fields are required'); return; }
         try {
-            await fetch('/api/v1/devices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cups_username: cups, authentik_username: auth }) });
+            await Api.request('/api/v1/devices', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cups_username: cups, authentik_username: auth }) });
             Toast.success('Device mapping added');
             location.reload();
-        } catch (e) { Toast.error('Error: ' + e.message); }
+        } catch (e) { Toast.error(e.message); }
     }
 
     async function deleteDevice(id) {
         const ok = await confirmAction({ title: 'Delete Mapping', message: 'Delete this device mapping?', confirmText: 'Delete', type: 'danger' });
         if (!ok) return;
         try {
-            await fetch(`/api/v1/devices/${id}`, { method: 'DELETE' });
+            await Api.request(`/api/v1/devices/${id}`, { method: 'DELETE' });
             Toast.success('Mapping deleted');
             location.reload();
-        } catch (e) { Toast.error('Error: ' + e.message); }
+        } catch (e) { Toast.error(e.message); }
     }
 
     // ─── Email Mapping ───────────────────────────────────────
@@ -435,20 +435,20 @@
         const user = document.getElementById('mapUser').value;
         if (!email || !user) { Toast.warning('Both fields are required'); return; }
         try {
-            await fetch('/api/v1/emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, username: user }) });
+            await Api.request('/api/v1/emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, username: user }) });
             Toast.success('Email mapping added');
             location.reload();
-        } catch (e) { Toast.error('Error: ' + e.message); }
+        } catch (e) { Toast.error(e.message); }
     }
 
     async function deleteEmail(email) {
         const ok = await confirmAction({ title: 'Delete Mapping', message: `Delete mapping for ${email}?`, confirmText: 'Delete', type: 'danger' });
         if (!ok) return;
         try {
-            await fetch(`/api/v1/emails/${encodeURIComponent(email)}`, { method: 'DELETE' });
+            await Api.request(`/api/v1/emails/${encodeURIComponent(email)}`, { method: 'DELETE' });
             Toast.success('Mapping deleted');
             location.reload();
-        } catch (e) { Toast.error('Error: ' + e.message); }
+        } catch (e) { Toast.error(e.message); }
     }
 
     // ─── Kiosk Devices ───────────────────────────────────────
@@ -458,12 +458,11 @@
         if (!name) { Toast.warning('Device name is required'); return; }
 
         try {
-            const r = await fetch('/api/admin/kiosk-devices', {
+            const data = await Api.request('/api/admin/kiosk-devices', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, allowed_ip: ip })
             });
-            const data = await r.json();
             if (data.registration_url) {
                 document.getElementById('addKioskForm').classList.add('d-none');
                 document.getElementById('kioskRegistrationResult').classList.remove('d-none');
@@ -472,17 +471,17 @@
             } else {
                 Toast.error(data.error || 'Registration failed');
             }
-        } catch (e) { Toast.error('Error: ' + e.message); }
+        } catch (e) { Toast.error(e.message); }
     }
 
     async function deleteKiosk(id) {
         const ok = await confirmAction({ title: 'Remove Kiosk Device', message: 'Remove this kiosk device? It will lose access immediately.', confirmText: 'Remove', type: 'danger' });
         if (!ok) return;
         try {
-            await fetch(`/api/admin/kiosk-devices/${id}`, { method: 'DELETE' });
+            await Api.request(`/api/admin/kiosk-devices/${id}`, { method: 'DELETE' });
             Toast.success('Kiosk device removed');
             location.reload();
-        } catch (e) { Toast.error('Error: ' + e.message); }
+        } catch (e) { Toast.error(e.message); }
     }
 </script>
 {% endblock %}

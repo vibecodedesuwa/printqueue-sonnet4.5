@@ -10,6 +10,8 @@ import json
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 
+from .identity import usernames_match
+
 
 class Database:
     """SQLite database manager"""
@@ -92,6 +94,18 @@ class Database:
                     registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_seen TIMESTAMP
                 );
+            ''')
+            # Older versions allowed duplicate metadata rows for one CUPS job.
+            # Keep the newest row so reads and claims are deterministic.
+            conn.execute('''
+                DELETE FROM print_job_meta
+                WHERE id NOT IN (
+                    SELECT MAX(id) FROM print_job_meta GROUP BY cups_job_id
+                )
+            ''')
+            conn.execute('''
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_print_job_meta_cups_job_id
+                ON print_job_meta(cups_job_id)
             ''')
 
     # ─── API Key Management ────────────────────────────────────────────
@@ -186,10 +200,15 @@ class Database:
     def create_job_meta(self, cups_job_id, submitted_via='ipp', original_filename=None, submitted_by=None):
         """Record metadata for a print job."""
         with self.get_connection() as conn:
-            conn.execute(
-                'INSERT INTO print_job_meta (cups_job_id, submitted_via, original_filename, submitted_by) VALUES (?, ?, ?, ?)',
-                (cups_job_id, submitted_via, original_filename, submitted_by)
-            )
+            conn.execute('''
+                INSERT INTO print_job_meta
+                    (cups_job_id, submitted_via, original_filename, submitted_by)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(cups_job_id) DO UPDATE SET
+                    submitted_via = excluded.submitted_via,
+                    original_filename = COALESCE(excluded.original_filename, print_job_meta.original_filename),
+                    submitted_by = COALESCE(excluded.submitted_by, print_job_meta.submitted_by)
+            ''', (cups_job_id, submitted_via, original_filename, submitted_by))
 
     def get_job_meta(self, cups_job_id):
         """Get metadata for a CUPS job."""
@@ -226,7 +245,9 @@ class Database:
         """Get list of unclaimed job IDs."""
         with self.get_connection() as conn:
             rows = conn.execute(
-                'SELECT cups_job_id FROM print_job_meta WHERE claimed_by IS NULL AND submitted_by IS NULL'
+                '''SELECT cups_job_id FROM print_job_meta
+                   WHERE claimed_by IS NULL
+                     AND (submitted_by IS NULL OR submitted_via = 'ipp')'''
             ).fetchall()
             return [r['cups_job_id'] for r in rows]
 
@@ -276,10 +297,20 @@ class Database:
         """Find Authentik username for a CUPS username."""
         with self.get_connection() as conn:
             row = conn.execute(
-                'SELECT authentik_username FROM known_devices WHERE cups_username = ? AND auto_match = 1',
+                'SELECT authentik_username FROM known_devices WHERE cups_username = ? COLLATE NOCASE AND auto_match = 1',
                 (cups_username,)
             ).fetchone()
-            return row['authentik_username'] if row else None
+            if row:
+                return row['authentik_username']
+
+            domain = os.environ.get('LDAP_DOMAIN', '')
+            rows = conn.execute(
+                'SELECT cups_username, authentik_username FROM known_devices WHERE auto_match = 1'
+            ).fetchall()
+            for candidate in rows:
+                if usernames_match(candidate['cups_username'], cups_username, domain=domain):
+                    return candidate['authentik_username']
+            return None
 
     def list_known_devices(self):
         with self.get_connection() as conn:

@@ -2,24 +2,31 @@ services:
   print-queue-manager:
     build:
       context: .
-      network: host
     container_name: print-queue-manager
     restart: unless-stopped
-    ports:
-      - "5000:5000"
     volumes:
       - ./data:/app/data
-      - /var/run/cups/cups.sock:/var/run/cups/cups.sock
     environment:
       - SECRET_KEY=${SECRET_KEY}
       - AUTHENTIK_CLIENT_ID=${AUTHENTIK_CLIENT_ID}
       - AUTHENTIK_CLIENT_SECRET=${AUTHENTIK_CLIENT_SECRET}
       - AUTHENTIK_METADATA_URL=${AUTHENTIK_METADATA_URL}
       - PRINTER_NAME=${PRINTER_NAME:-HP_Smart_Tank_515}
+      - CUPS_SERVER=127.0.0.1:631
+      - CUPS_USER=${CUPS_USER:-print}
+      - CUPS_PASSWORD=${CUPS_PASSWORD:-print}
       - ADMIN_GROUPS=${ADMIN_GROUPS:-admins,print-admins}
       - ADMIN_USERS=${ADMIN_USERS:-admin}
       - DATABASE_PATH=data/printqueue.db
       - UPLOAD_FOLDER=data/uploads
+      - OFFICE_FOLDER=data/office
+      # Collabora Online / WOPI office editor
+      - COLLABORA_ENABLED=${COLLABORA_ENABLED:-true}
+      - COLLABORA_URL=${COLLABORA_URL:-https://office.toonshou.in}
+      - COLLABORA_INTERNAL_URL=${COLLABORA_INTERNAL_URL:-http://172.16.0.9:9980}
+      - COLLABORA_VERIFY_TLS=${COLLABORA_VERIFY_TLS:-true}
+      - WOPI_PUBLIC_URL=${WOPI_PUBLIC_URL:-}
+      - WOPI_TOKEN_TTL=${WOPI_TOKEN_TTL:-14400}
       # Email Print (optional)
       - MAIL_ENABLED=${MAIL_ENABLED:-false}
       - MAIL_IMAP_HOST=${MAIL_IMAP_HOST:-}
@@ -44,26 +51,32 @@ services:
       - LDAP_USER_SEARCH_FILTER=${LDAP_USER_SEARCH_FILTER:-(&(objectClass=user)(sAMAccountName={username}))}
       # Claim system
       - UNCLAIMED_JOB_TIMEOUT=${UNCLAIMED_JOB_TIMEOUT:-24}
+    depends_on:
+      cups:
+        condition: service_healthy
     network_mode: host
 
   cups:
-    image: olbat/cupsd:stable-2026-07-06
+    build:
+      context: .
+      dockerfile: Dockerfile.cups
     container_name: cups-server
     restart: unless-stopped
-    ports:
-      - "631:631"
-      - "5353:5353/udp" # mDNS for AirPrint/Mopria discovery
     volumes:
       - cups-data:/etc/cups
+      - ./config/cupsd.conf:/etc/cups/cupsd.conf:ro
       - ./ppd:/usr/share/cups/model
       - ./config/avahi:/etc/avahi/services # AirPrint service files
     environment:
-      - CUPSADMIN=admin
-      - CUPSPASSWORD=admin
+      - CUPS_USER=${CUPS_USER:-print}
+      - CUPS_PASSWORD=${CUPS_PASSWORD:-print}
+    healthcheck:
+      test: ["CMD", "lpstat", "-r"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
     network_mode: host
 
 volumes:
-  print-network:
-    driver: bridge
   cups-data:
     driver: local

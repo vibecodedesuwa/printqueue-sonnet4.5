@@ -117,7 +117,8 @@ class MailPrinterService:
             if part.get_content_maintype() == 'multipart':
                 continue
 
-            filename = self._decode_header(part.get_filename())
+            from ..filenames import clean_display_filename, unique_storage_filename
+            filename = clean_display_filename(self._decode_header(part.get_filename()))
             if not filename:
                 continue
 
@@ -126,9 +127,8 @@ class MailPrinterService:
                 continue
 
             # Save attachment
-            from werkzeug.utils import secure_filename
-            safe_name = secure_filename(filename)
-            filepath = os.path.join(upload_dir, f"email_{uid}_{safe_name}")
+            safe_name = unique_storage_filename(filename, prefix=f'email_{uid}')
+            filepath = os.path.join(upload_dir, safe_name)
 
             with open(filepath, 'wb') as f:
                 f.write(part.get_payload(decode=True))

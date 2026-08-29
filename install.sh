@@ -5,6 +5,10 @@
 
 set -e
 
+SOURCE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+TARGET_DIR=/opt/print-queue-manager
+BACKUP_DIR=
+
 echo "╔═══════════════════════════════════════════════════════════╗"
 echo "║   Print Queue Manager - Automated Installation Script    ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
@@ -36,6 +40,8 @@ apt install -y \
     avahi-daemon \
     avahi-utils \
     libreoffice-writer \
+    fonts-noto-core \
+    fonts-thai-tlwg \
     libmagic1
 
 echo "✅ System dependencies installed"
@@ -47,30 +53,42 @@ systemctl start cups
 cupsctl --remote-any
 cupsctl --share-printers
 
+if [ -f "$SOURCE_DIR/config/cupsd.conf" ]; then
+    cp -a /etc/cups/cupsd.conf "/etc/cups/cupsd.conf.backup.$(date +%Y%m%d_%H%M%S)"
+    install -m 0644 "$SOURCE_DIR/config/cupsd.conf" /etc/cups/cupsd.conf
+    cupsd -t
+    systemctl restart cups
+fi
+
 echo "✅ CUPS configured"
 echo ""
 
 echo "📁 Step 3: Creating application directory..."
-if [ -d "/opt/print-queue-manager" ]; then
+if [ -d "$TARGET_DIR" ] && [ "$SOURCE_DIR" != "$TARGET_DIR" ]; then
     echo "⚠️  Directory already exists. Creating backup..."
-    mv /opt/print-queue-manager /opt/print-queue-manager.backup.$(date +%Y%m%d_%H%M%S)
+    BACKUP_DIR="$TARGET_DIR.backup.$(date +%Y%m%d_%H%M%S)"
+    mv "$TARGET_DIR" "$BACKUP_DIR"
 fi
 
-mkdir -p /opt/print-queue-manager
-cd /opt/print-queue-manager
+mkdir -p "$TARGET_DIR"
+cd "$TARGET_DIR"
 
-# Check if we're in the source directory
-if [ -f "../app.py" ]; then
-    echo "📋 Copying files from current directory..."
-    cp -r ../app.py ../requirements.txt ../templates ./ 2>/dev/null || true
+# Copy the complete application, not only the entry point and templates.
+if [ "$SOURCE_DIR" = "$TARGET_DIR" ]; then
+    echo "📋 Running in-place from $TARGET_DIR"
+elif [ -f "$SOURCE_DIR/app.py" ] && [ -d "$SOURCE_DIR/printqueue" ]; then
+    echo "📋 Copying files from $SOURCE_DIR..."
+    cp -a "$SOURCE_DIR/app.py" "$SOURCE_DIR/requirements.txt" .
+    cp -a "$SOURCE_DIR/printqueue" "$SOURCE_DIR/templates" "$SOURCE_DIR/static" "$SOURCE_DIR/scripts" "$SOURCE_DIR/config" .
 else
-    echo "⚠️  Source files not found in parent directory"
-    echo "Please manually copy the application files to /opt/print-queue-manager/"
-    echo "Required files:"
-    echo "  - app.py"
-    echo "  - requirements.txt"
-    echo "  - templates/ (directory)"
+    echo "❌ Source files were not found beside install.sh"
     exit 1
+fi
+
+# Preserve deployment state during an upgrade.
+if [ -n "$BACKUP_DIR" ]; then
+    [ -f "$BACKUP_DIR/.env" ] && cp -a "$BACKUP_DIR/.env" .
+    [ -d "$BACKUP_DIR/data" ] && cp -a "$BACKUP_DIR/data" .
 fi
 
 echo "✅ Application files copied"
@@ -98,12 +116,32 @@ AUTHENTIK_CLIENT_ID=your-client-id-here
 AUTHENTIK_CLIENT_SECRET=your-client-secret-here
 AUTHENTIK_METADATA_URL=https://your-authentik-domain.com/application/o/print-queue/.well-known/openid-configuration
 
+# Collabora Online (set WOPI_PUBLIC_URL to this PrintQ server's reachable URL)
+COLLABORA_ENABLED=true
+COLLABORA_URL=https://office.toonshou.in
+COLLABORA_INTERNAL_URL=http://172.16.0.9:9980
+WOPI_PUBLIC_URL=
+WOPI_TOKEN_TTL=14400
+OFFICE_FOLDER=data/office
+
 # Printer Configuration
 PRINTER_NAME=HP_Smart_Tank_515
 
 # Admin Configuration
 ADMIN_GROUPS=admins,print-admins
 ADMIN_USERS=admin
+
+# Active Directory / LDAP
+LDAP_ENABLED=false
+LDAP_SHOW_IN_WEBUI=true
+LDAP_HOST=ad.domain.local
+LDAP_PORT=389
+LDAP_USE_SSL=false
+LDAP_BASE_DN=DC=domain,DC=local
+LDAP_BIND_DN=CN=print-service,OU=Services,DC=domain,DC=local
+LDAP_BIND_PASSWORD=change-me
+LDAP_DOMAIN=domain.local
+LDAP_USER_SEARCH_FILTER=(&(objectClass=user)(sAMAccountName={username}))
 
 # Application Settings
 FLASK_ENV=production
@@ -161,7 +199,10 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     
     echo ""
     echo "Configuring printer to hold jobs by default..."
-    lpadmin -p HP_Smart_Tank_515 -o job-hold-until=indefinite
+    lpadmin -p HP_Smart_Tank_515 \
+        -o job-hold-until-default=indefinite \
+        -o printer-op-policy=authenticated \
+        -o printer-is-shared=true
     cupsenable HP_Smart_Tank_515
     cupsaccept HP_Smart_Tank_515
     

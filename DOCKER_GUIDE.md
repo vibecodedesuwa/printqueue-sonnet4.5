@@ -6,7 +6,7 @@ This guide details how to deploy, configure, and maintain **PrintQ (Print Queue 
 
 ## 📌 1. Architecture Overview
 
-PrintQ runs as a multi-container Docker Compose application:
+PrintQ runs as a multi-container Docker Compose application on a Linux host (host networking is used for CUPS and LAN printer discovery):
 
 ```
                   ┌────────────────────────────────────────────────────────┐
@@ -25,7 +25,7 @@ PrintQ runs as a multi-container Docker Compose application:
                     │   │ - QR Code Upload & Claim System          │   │
                     │   └────────────────────┬─────────────────────┘   │
                     │                        │                         │
-                    │                        │ Shared CUPS Socket      │
+                    │                        │ Authenticated CUPS API  │
                     │                        ▼                         │
                     │   ┌──────────────────────────────────────────┐   │
                     │   │ CUPS Container (Server & Spooler)        │   │
@@ -77,6 +77,10 @@ LDAP_BIND_DN=CN=print-service,OU=ServiceAccounts,DC=company,DC=com
 LDAP_BIND_PASSWORD=SuperSecretPassword
 LDAP_DOMAIN=company.com
 
+# CUPS web/application service account
+CUPS_USER=print
+CUPS_PASSWORD=replace-with-a-strong-password
+
 # Printer Settings
 PRINTER_NAME=HP_Smart_Tank_515
 
@@ -88,13 +92,13 @@ ADMIN_USERS=admin
 ### Step 3: Launch Containers
 
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 Verify running containers:
 
 ```bash
-docker-compose ps
+docker compose ps
 ```
 
 ---
@@ -110,6 +114,21 @@ PrintQ supports **Dual Authentication**:
 ### 2. Active Directory (LDAP)
 - Configured via `LDAP_ENABLED=true` and `LDAP_HOST`.
 - Users log in using their Active Directory credentials directly from the landing page or login modal.
+- CUPS owners such as `COMPANY\\alice` and `alice@company.com` are automatically bound to the web account `alice`; no manual device mapping is needed.
+
+### 3. Require Active Directory credentials in CUPS (optional)
+
+The normal compose file supports app-side LDAP login and identity binding. To make the printer itself validate every IPP login against AD, the Linux Docker host must already be domain-joined with SSSD:
+
+```bash
+getent passwd 'alice@company.com'
+docker compose -f docker-compose.yml -f docker-compose.ad.yml up -d --build
+docker exec cups-server setup-airprint
+```
+
+The AD overlay shares only the host SSSD responder sockets and Kerberos configuration with CUPS. The setup command assigns the `authenticated` CUPS policy and the indefinite hold default to `PRINTER_NAME`. If `getent` fails on the host, fix the host domain join before starting the overlay.
+
+> CUPS Basic authentication should only be exposed on a trusted network unless TLS is configured. For Kerberos/Negotiate environments, adapt the supplied CUPS policy to `AuthType Negotiate`.
 
 ---
 
@@ -129,7 +148,7 @@ PrintQ supports **Dual Authentication**:
 1. **AirPrint Zero-Config**:
    - Run setup AirPrint script inside CUPS container:
      ```bash
-     docker exec -it cups-server bash /scripts/setup-airprint.sh
+     docker exec cups-server setup-airprint
      ```
    - Select **Print** in any iOS app → Select printer.
 2. **QR Code Quick Upload**:
@@ -150,17 +169,30 @@ If a job is submitted via AirPrint, Mopria, Web Upload, or Email:
 3. Log into the Web Dashboard, find your job in **Unclaimed Jobs**, and click **Claim**.
 4. Click **Print & Release** to authorize printing.
 
-> **Permission Fix Note**: The authorization engine verifies whether your logged-in username matches the CUPS job owner, the DB `claimed_by` user, the `submitted_by` owner, or an mapped device username.
+> **Permission note**: The authorization engine normalizes AD identity variants and verifies the signed-in user against the CUPS owner, claim owner, submitted owner, or an explicit device mapping.
 
 ---
 
-## 📄 6. Built-in A4 Document Editor
+## 📄 6. Collabora Office and A4 Editors
 
-PrintQ includes a lightweight A4 document editor for fast page creation:
+PrintQ can use Collabora Online as a full Writer interface and retains the lightweight editor as an offline fallback:
 - Access via **A4 Editor** in navbar (`/editor`).
+- Create Thai-ready ODT documents or open existing ODT/DOCX files.
+- Collabora saves through PrintQ's signed WOPI endpoints; **Save & Print** converts the saved document to PDF and submits it to CUPS.
 - Rich text formatting (headings, fonts, bold/italic, alignment, image insertion).
 - Live A4 page canvas (210mm x 297mm).
 - Click **Print A4 Document** to convert canvas into PDF and submit directly to CUPS.
+
+For the supplied TrueNAS Collabora instance, add this to `.env`:
+
+```env
+COLLABORA_ENABLED=true
+COLLABORA_URL=https://office.toonshou.in
+COLLABORA_INTERNAL_URL=http://172.16.0.9:9980
+WOPI_PUBLIC_URL=https://printq.your-domain.com
+```
+
+`WOPI_PUBLIC_URL` must resolve to PrintQ from inside the Collabora container. Do not use `localhost`. Add the PrintQ hostname to Collabora's WOPI host allow-list. For reliable Thai rendering, install Noto Sans Thai on the Collabora host or expose it through Collabora's remote font configuration; the PrintQ container installs Noto and TLWG Thai fonts automatically.
 
 ---
 
@@ -176,14 +208,14 @@ Switch languages anytime using the language selector (🇺🇸 EN / 🇹🇭 TH)
 
 ### Check Logs
 ```bash
-docker-compose logs -f print-queue-manager
-docker-compose logs -f cups
+docker compose logs -f print-queue-manager
+docker compose logs -f cups
 ```
 
 ### Restart Services
 ```bash
-docker-compose restart
+docker compose restart
 ```
 
 ### CUPS Web Interface
-Access CUPS administrative backend at: `http://<server-ip>:631` (User: `admin`, Password: `CUPSPASSWORD` in `.env`).
+Access CUPS at `http://<server-ip>:631` with `CUPS_USER` and `CUPS_PASSWORD` from `.env` (default user: `print`).
