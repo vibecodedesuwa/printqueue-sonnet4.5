@@ -383,6 +383,11 @@ SAMBA_WINDOWS_QUEUE=es_non01_st515_01_windows
 LDAP_TEST_USER=kritthapath
 ```
 
+`LDAP_TEST_USER` accepts a short `sAMAccountName`, a UPN such as
+`nromeiio@echo.story`, or a NetBIOS-qualified name such as
+`ECHOSTORY\nromeiio`. The setup script automatically tries the qualified forms
+when Winbind does not expose short-name aliases.
+
 Run on an existing installation—no reinstall is required:
 
 ```bash

@@ -261,10 +261,28 @@ fi
 echo "🔎 Verifying the AD trust and identity mapping..."
 wbinfo --check-secret
 if [ -n "$LDAP_TEST_USER" ]; then
-    if ! getent passwd "$LDAP_TEST_USER"; then
+    TEST_IDENTITIES=("$LDAP_TEST_USER")
+    if [[ "$LDAP_TEST_USER" != *'\'* && "$LDAP_TEST_USER" != *@* ]]; then
+        TEST_IDENTITIES+=("${SAMBA_WORKGROUP}\\${LDAP_TEST_USER}")
+        TEST_IDENTITIES+=("${LDAP_TEST_USER}@${SAMBA_REALM}")
+    fi
+
+    RESOLVED_TEST_USER=
+    for TEST_IDENTITY in "${TEST_IDENTITIES[@]}"; do
+        if getent passwd "$TEST_IDENTITY" >/dev/null; then
+            RESOLVED_TEST_USER=$TEST_IDENTITY
+            break
+        fi
+    done
+
+    if [ -z "$RESOLVED_TEST_USER" ]; then
         echo "❌ Winbind cannot resolve LDAP_TEST_USER '$LDAP_TEST_USER'."
         echo "   Check SAMBA_REALM, SAMBA_WORKGROUP, AD DNS, and the domain join."
         exit 1
+    fi
+    getent passwd "$RESOLVED_TEST_USER"
+    if [ "$RESOLVED_TEST_USER" != "$LDAP_TEST_USER" ]; then
+        echo "✅ Winbind resolved '$LDAP_TEST_USER' as '$RESOLVED_TEST_USER'"
     fi
 fi
 
