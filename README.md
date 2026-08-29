@@ -143,6 +143,29 @@ docker compose up -d --build
 
 ---
 
+## 🗺️ Roadmap
+
+These are planned or exploratory directions, not committed release dates:
+
+- **Multiple-printer support** — manage several queues, capabilities, locations,
+  routing rules, defaults, and per-printer permissions from one PrintQ server.
+- **Generic and vendor-specific drivers** — prefer driverless IPP Everywhere
+  where possible, while investigating optional PPD/backend packages for specific
+  brands and models whose advanced features require a manufacturer driver.
+- **Home Assistant and observability integrations** — expose printer/job health
+  through webhooks, MQTT, Prometheus-compatible metrics, and dashboards suitable
+  for Home Assistant and Grafana.
+- **Distributed PrintQ agent** — a lightweight, mostly Linux edge agent for
+  Raspberry Pi and similar devices, connecting local USB/network printers to a
+  centralized PrintQ management server with health, capability, and job-status
+  reporting.
+- **Externally accessible paid guest printing** — expose only the QR workflow
+  through a protected Cloudflare path, then authorize printing after PromptPay
+  or Stripe payment. Direct printing must remain disabled externally until this
+  authorization boundary exists.
+
+---
+
 ## 📚 Guides & Documentation
 
 - 🐳 **[DOCKER_GUIDE.md](DOCKER_GUIDE.md)** — Comprehensive Docker deployment and container orchestration guide.
