@@ -1,6 +1,6 @@
-# Print Queue Manager — Bare-Metal (Debian) & LXC Setup Guide
+# Print Queue Manager — Bare-Metal Linux & LXC Setup Guide
 
-Complete guide to install and configure PrintQ on a Debian/Ubuntu host (Bare-Metal) or Proxmox LXC. Includes Active Directory (AD) authentication for IPP printing (Android/iOS).
+Complete guide to install and configure PrintQ on Ubuntu, Debian, Fedora, CentOS Stream, or AlmaLinux. Proxmox LXC is supported with a Debian/Ubuntu guest. Includes Active Directory (AD) authentication for IPP printing (Android/iOS).
 
 This guide has two paths:
 - **Part A: Automated Installation** — Run `install.sh` and follow the interactive prompts
@@ -10,7 +10,8 @@ This guide has two paths:
 
 ## 📋 Prerequisites
 
-- A Bare-Metal Debian/Ubuntu Server OR a Proxmox server with LXC support
+- A supported systemd-based server: Ubuntu, Debian, Fedora, CentOS Stream, or AlmaLinux
+- Or a Proxmox server with a Debian/Ubuntu LXC guest
 - Authentik instance running and accessible (or Active Directory for AD-only auth)
 - Your printer connected via USB or network to the host/container
 - (Optional) Active Directory server if you want AD-authenticated IPP printing
@@ -104,6 +105,8 @@ For users who want full control, are customizing the setup, or are troubleshooti
 
 > *`install.sh` automates this in Step 1.*
 
+**Debian / Ubuntu:**
+
 ```bash
 apt update && apt upgrade -y
 
@@ -127,6 +130,20 @@ apt install -y \
     fonts-noto-core \
     fonts-thai-tlwg \
     libmagic1
+```
+
+**Fedora / CentOS Stream / AlmaLinux:**
+
+```bash
+dnf upgrade -y
+dnf install -y \
+    cups cups-client cups-devel cups-filters \
+    python3 python3-pip python3-devel \
+    gcc git curl nano openssl \
+    avahi avahi-tools libreoffice-writer file-libs
+
+# Font package availability varies by enabled repositories.
+dnf install -y google-noto-sans-fonts google-noto-sans-thai-fonts || true
 ```
 
 > **Package notes:**
@@ -188,7 +205,11 @@ lpadmin -p MY_PRINTER -v usb://Manufacturer/Model -E
 
 **Option 3: HP printers (optional)**
 ```bash
+# Debian / Ubuntu
 apt install -y hplip
+
+# Fedora / CentOS Stream / AlmaLinux
+dnf install -y hplip
 hp-setup -i
 ```
 
@@ -235,7 +256,7 @@ sudo bash scripts/setup-cups-ldap.sh
 
 ### Option 2: Manual
 
-#### Install PAM/NSS LDAP packages
+#### Debian / Ubuntu: install PAM/NSS LDAP packages
 
 ```bash
 DEBIAN_FRONTEND=noninteractive apt install -y nslcd libnss-ldapd libpam-ldapd
@@ -262,19 +283,23 @@ pagesize 1000
 referrals off
 filter passwd (&(objectClass=user)(!(objectClass=computer))(sAMAccountName=*))
 map passwd uid sAMAccountName
-map passwd uidNumber objectSid:S-1-5-21-0-0-0
-map passwd gidNumber primaryGroupID
+map passwd uidNumber objectSid:S-1-5-21-YOUR-REAL-DOMAIN-SID
+map passwd gidNumber objectSid:S-1-5-21-YOUR-REAL-DOMAIN-SID
 map passwd homeDirectory "/home/$sAMAccountName"
 map passwd loginShell "/bin/false"
 map passwd gecos displayName
 
 filter group (objectClass=group)
 map group cn sAMAccountName
-map group gidNumber objectSid:S-1-5-21-0-0-0
+map group gidNumber objectSid:S-1-5-21-YOUR-REAL-DOMAIN-SID
 
 ssl off
 tls_reqcert never
 ```
+
+For production LDAPS, change `tls_reqcert` to `demand` and install your AD CA certificate in the system trust store.
+
+The domain SID must be the real value for your AD domain, not a placeholder. Retrieve it from an AD management host with `(Get-ADDomain).DomainSID.Value` in PowerShell and set `LDAP_AD_DOMAIN_SID` in `.env` when using Debian/Ubuntu.
 
 ```bash
 chmod 600 /etc/nslcd.conf
@@ -292,6 +317,17 @@ sed -i -E '/^(passwd|group|shadow):/ { /(^|[[:space:]])ldap([[:space:]]|$)/! s/$
 ```bash
 systemctl enable nslcd
 systemctl restart nslcd
+systemctl restart cups
+```
+
+#### Fedora / CentOS Stream / AlmaLinux: use SSSD
+
+RHEL-family systems use SSSD instead of the removed `nss-pam-ldapd` stack. The automated `setup-cups-ldap.sh` script installs `sssd-ldap`, writes a protected SSSD configuration, and selects the SSSD `authselect` profile. When `LDAP_USE_SSL=false`, the script uses StartTLS because SSSD does not permit password authentication over an unencrypted LDAP connection.
+
+If the machine is already joined to AD/IdM or has a custom `/etc/sssd/sssd.conf`, the script refuses to overwrite it. In that case, verify `getent passwd <ad-user>` works and only apply the CUPS policy:
+
+```bash
+lpadmin -p YOUR_PRINTER_NAME -o printer-op-policy=authenticated
 systemctl restart cups
 ```
 
@@ -364,6 +400,8 @@ LDAP_BASE_DN=DC=domain,DC=local
 LDAP_BIND_DN=CN=print-service,OU=Services,DC=domain,DC=local
 LDAP_BIND_PASSWORD=your-ad-password
 LDAP_DOMAIN=domain.local
+LDAP_AD_DOMAIN_SID=S-1-5-21-your-real-domain-sid
+LDAP_TLS_REQCERT=demand
 
 # CUPS service account (used by the web app — always needed)
 CUPS_USER=print
@@ -547,8 +585,11 @@ echo "Test print from $(hostname)" | lpr -P YOUR_PRINTER_NAME
 ### Test AD Authentication (if enabled)
 
 ```bash
-# Verify nslcd is running
+# Debian / Ubuntu
 systemctl status nslcd
+
+# Fedora / CentOS Stream / AlmaLinux
+systemctl status sssd
 
 # Verify AD user resolution
 getent passwd <ad-username>
@@ -590,13 +631,21 @@ ss -ulnp | grep 5353
 systemctl restart avahi-daemon
 ```
 
-**AD authentication not working (nslcd):**
+**AD authentication not working:**
 ```bash
+# Debian / Ubuntu
 systemctl status nslcd
 journalctl -u nslcd -n 20
-getent passwd <ad-username>   # Should return user info
 nslcd -d                      # Run in debug mode (stop service first)
 cat /etc/nslcd.conf           # Verify settings
+
+# Fedora / CentOS Stream / AlmaLinux
+systemctl status sssd
+journalctl -u sssd -n 50
+sssctl config-check
+
+# All supported distributions
+getent passwd <ad-username>   # Should return user info
 ```
 
 **AD credential prompt not appearing on Android/iOS:**
@@ -641,7 +690,8 @@ systemctl restart print-queue-manager
 journalctl -u print-queue-manager -f        # Real-time
 journalctl -u print-queue-manager --since today
 tail -f /var/log/cups/error_log              # CUPS logs
-journalctl -u nslcd -f                      # AD/LDAP logs (if enabled)
+journalctl -u nslcd -f                       # AD logs: Debian/Ubuntu
+journalctl -u sssd -f                        # AD logs: RHEL-family
 ```
 
 ### Backup
@@ -651,8 +701,11 @@ tar -czf print-queue-backup-$(date +%Y%m%d).tar.gz \
     /opt/print-queue-manager/data \
     /opt/print-queue-manager/.env \
     /etc/cups \
-    /etc/avahi/services \
-    /etc/nslcd.conf
+    /etc/avahi/services
+
+# Also back up the applicable identity configuration:
+tar -czf print-queue-identity-backup-$(date +%Y%m%d).tar.gz \
+    /etc/nslcd.conf /etc/sssd/sssd.conf 2>/dev/null || true
 ```
 
 ### Update

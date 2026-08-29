@@ -115,6 +115,8 @@ docker compose up -d --build
 | `LDAP_BIND_DN`            |                       | Service Account Bind DN                               |
 | `LDAP_BIND_PASSWORD`      |                       | Service Account password                              |
 | `LDAP_DOMAIN`             |                       | AD DNS domain used to normalize CUPS/LDAP identities  |
+| `LDAP_AD_DOMAIN_SID`      |                       | AD domain SID required for Debian/Ubuntu host CUPS auth |
+| `LDAP_TLS_REQCERT`        | `demand`              | LDAP TLS certificate policy for host CUPS authentication |
 | `PRINTER_NAME`            | `HP_Smart_Tank_515`   | Target CUPS printer name (must match actual CUPS printer name, e.g. `lpstat -p`) |
 | `CUPS_USER`               | `print`               | CUPS service account used by the web application      |
 | `CUPS_PASSWORD`           | `print`               | CUPS service password; change this before deployment  |
@@ -133,6 +135,8 @@ docker compose up -d --build
 - 🐳 **[DOCKER_GUIDE.md](DOCKER_GUIDE.md)** — Comprehensive Docker deployment and container orchestration guide.
 - 📱 **[CLIENT_PRINT_GUIDE.md](CLIENT_PRINT_GUIDE.md)** — Step-by-step setup for Windows, Mac, Linux, iOS/iPadOS, and Android clients.
 - 🖥️ **[BARE_METAL_AND_LXC_GUIDE.md](BARE_METAL_AND_LXC_GUIDE.md)** — Guide for installing PrintQ on bare-metal Linux or LXC containers.
+
+The bare-metal installer supports Ubuntu, Debian, Fedora, CentOS Stream, and AlmaLinux. It automatically selects `apt-get`/`nslcd` on Debian-family systems and `dnf`/SSSD on RHEL-family systems.
 
 ---
 

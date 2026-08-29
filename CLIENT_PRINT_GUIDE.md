@@ -160,4 +160,4 @@ When you print from a phone via AirPrint/Mopria, the system may not know who you
 | "Unclaimed" job                 | Log into web dashboard and claim it                            |
 | File type not supported         | Convert to PDF first — supported: PDF, PNG, JPG, DOCX, TXT     |
 | Windows can't connect           | Ensure Internet Printing Client is enabled                     |
-| AD credential prompt not appearing | Check that LDAP_ENABLED=true and nslcd is running           |
+| AD credential prompt not appearing | Check `LDAP_ENABLED=true`; verify `nslcd` (Debian/Ubuntu) or `sssd` (Fedora/CentOS/AlmaLinux) is running |

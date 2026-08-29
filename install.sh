@@ -1,13 +1,39 @@
 #!/bin/bash
 
 # Print Queue Manager - Automated Deployment Script
-# For Bare-Metal Debian/Ubuntu or Proxmox LXC
+# For bare-metal Linux or systemd-based containers.
+# Supported: Ubuntu, Debian, Fedora, CentOS Stream, AlmaLinux and compatible
+# Debian/RHEL-family distributions.
 
 set -e
 
 SOURCE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 TARGET_DIR=/opt/print-queue-manager
 BACKUP_DIR=
+
+# shellcheck source=scripts/platform.sh
+. "$SOURCE_DIR/scripts/platform.sh"
+
+load_install_settings() {
+    local line key value
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%$'\r'}"
+        case "$line" in ''|'#'*) continue ;; esac
+        key=${line%%=*}
+        [ "$key" = "$line" ] && continue
+        value=${line#*=}
+        case "$value" in
+            \"*\") value=${value#\"}; value=${value%\"} ;;
+            \'*\') value=${value#\'}; value=${value%\'} ;;
+        esac
+        case "$key" in
+            PRINTER_NAME|LDAP_ENABLED|LDAP_HOST|LDAP_PORT|LDAP_USE_SSL|LDAP_BASE_DN|LDAP_BIND_DN|LDAP_BIND_PASSWORD|LDAP_DOMAIN|LDAP_AD_DOMAIN_SID|LDAP_USER_SEARCH_FILTER|LDAP_TLS_REQCERT|CUPS_USER|CUPS_PASSWORD)
+                printf -v "$key" '%s' "$value"
+                export "$key"
+                ;;
+        esac
+    done < "$1"
+}
 
 echo "╔═══════════════════════════════════════════════════════════╗"
 echo "║   Print Queue Manager - Automated Installation Script    ║"
@@ -20,37 +46,37 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+detect_platform
+SERVER_IP=$(primary_ip)
+echo "🐧 Detected: $PRINTQ_DISTRO_NAME $PRINTQ_DISTRO_VERSION ($PRINTQ_DISTRO_FAMILY family)"
+echo ""
+
 # ── Step 1: Install System Dependencies ────────────────────────────────────
 echo "📦 Step 1: Installing system dependencies..."
-apt update
-apt install -y \
-    cups \
-    cups-client \
-    cups-bsd \
-    printer-driver-all \
-    python3 \
-    python3-pip \
-    python3-venv \
-    python3-dev \
-    libcups2-dev \
-    gcc \
-    git \
-    curl \
-    nano \
-    avahi-daemon \
-    avahi-utils \
-    libreoffice-writer \
-    fonts-noto-core \
-    fonts-thai-tlwg \
-    libmagic1
+package_update
+if [ "$PRINTQ_DISTRO_FAMILY" = "debian" ]; then
+    package_install \
+        cups cups-client cups-bsd printer-driver-all \
+        python3 python3-pip python3-venv python3-dev libcups2-dev \
+        gcc git curl nano openssl \
+        avahi-daemon avahi-utils \
+        libreoffice-writer fonts-noto-core fonts-thai-tlwg libmagic1
+else
+    package_install \
+        cups cups-client cups-devel cups-filters \
+        python3 python3-pip python3-devel \
+        gcc git curl nano openssl \
+        avahi avahi-tools libreoffice-writer file-libs
+    package_install_optional \
+        google-noto-sans-fonts google-noto-sans-thai-fonts thai-scalable-fonts-common
+fi
 
 echo "✅ System dependencies installed"
 echo ""
 
 # ── Step 2: Configure CUPS Basics ──────────────────────────────────────────
 echo "🖨️ Step 2: Configuring CUPS..."
-systemctl enable cups
-systemctl start cups
+service_enable_start cups
 cupsctl --remote-any
 cupsctl --share-printers
 
@@ -80,8 +106,11 @@ if [ "$SOURCE_DIR" = "$TARGET_DIR" ]; then
     echo "📋 Running in-place from $TARGET_DIR"
 elif [ -f "$SOURCE_DIR/app.py" ] && [ -d "$SOURCE_DIR/printqueue" ]; then
     echo "📋 Copying files from $SOURCE_DIR..."
-    cp -a "$SOURCE_DIR/app.py" "$SOURCE_DIR/requirements.txt" .
+    cp -a "$SOURCE_DIR/app.py" "$SOURCE_DIR/requirements.txt" "$SOURCE_DIR/.env.example" .
     cp -a "$SOURCE_DIR/printqueue" "$SOURCE_DIR/templates" "$SOURCE_DIR/static" "$SOURCE_DIR/scripts" "$SOURCE_DIR/config" .
+    for documentation_file in README.md BARE_METAL_AND_LXC_GUIDE.md CLIENT_PRINT_GUIDE.md; do
+        [ ! -f "$SOURCE_DIR/$documentation_file" ] || cp -a "$SOURCE_DIR/$documentation_file" .
+    done
 else
     echo "❌ Source files were not found beside install.sh"
     exit 1
@@ -98,7 +127,11 @@ echo ""
 
 # ── Step 4: Python Virtual Environment ─────────────────────────────────────
 echo "🐍 Step 4: Setting up Python environment..."
-python3 -m venv venv
+if ! python3 -m venv venv; then
+    echo "⚠️  Python's built-in venv module is unavailable; trying virtualenv..."
+    package_install_optional python3-virtualenv
+    python3 -m virtualenv venv
+fi
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
@@ -170,7 +203,9 @@ LDAP_BASE_DN=DC=domain,DC=local
 LDAP_BIND_DN=CN=print-service,OU=Services,DC=domain,DC=local
 LDAP_BIND_PASSWORD=change-me
 LDAP_DOMAIN=domain.local
+LDAP_AD_DOMAIN_SID=
 LDAP_USER_SEARCH_FILTER=(&(objectClass=user)(sAMAccountName={username}))
+LDAP_TLS_REQCERT=demand
 
 # CUPS service account (used by the web app to manage jobs — always needed)
 CUPS_USER=print
@@ -210,11 +245,41 @@ else
     echo "   Verify PRINTER_NAME and LDAP settings are correct."
 fi
 
-# Re-read .env for use in later steps
-set -a
-# shellcheck disable=SC1091
-. .env
-set +a
+# Read only the settings needed by this installer. Do not source .env: LDAP
+# filters legitimately contain shell metacharacters such as '&' and '('.
+load_install_settings .env
+
+# CUPS Basic authentication uses PAM, so the web application's service
+# credentials must correspond to a real local account.
+if [ -z "${CUPS_USER:-}" ] || [ -z "${CUPS_PASSWORD:-}" ]; then
+    echo "❌ CUPS_USER and CUPS_PASSWORD must both be set in .env"
+    exit 1
+fi
+case "$CUPS_USER" in
+    *$'\n'*|*:*)
+        echo "❌ CUPS_USER may not contain a newline or colon."
+        exit 1
+        ;;
+esac
+if ! [[ "$CUPS_USER" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]; then
+    echo "❌ CUPS_USER must be a valid lowercase Linux service-account name."
+    exit 1
+fi
+case "$CUPS_PASSWORD" in
+    *$'\n'*) echo "❌ CUPS_PASSWORD may not contain a newline."; exit 1 ;;
+esac
+if getent passwd "$CUPS_USER" >/dev/null 2>&1 && ! getent -s files passwd "$CUPS_USER" >/dev/null 2>&1; then
+    echo "❌ CUPS_USER '$CUPS_USER' resolves from a directory service, not /etc/passwd."
+    echo "   Choose a unique local service-account name; its password will be managed by PrintQ."
+    exit 1
+fi
+getent -s files group lpadmin >/dev/null 2>&1 || groupadd --system lpadmin
+if ! getent -s files passwd "$CUPS_USER" >/dev/null 2>&1; then
+    useradd --system --no-create-home --shell /usr/sbin/nologin "$CUPS_USER"
+fi
+usermod -a -G lpadmin "$CUPS_USER"
+printf '%s:%s\n' "$CUPS_USER" "$CUPS_PASSWORD" | chpasswd
+echo "✅ Local CUPS service account '$CUPS_USER' is ready"
 
 echo ""
 
@@ -238,7 +303,7 @@ else
 
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "   Installing HP printer tools..."
-        apt install -y hplip 2>/dev/null || true
+        package_install_optional hplip
         echo ""
         echo "   Starting HP printer setup..."
         echo "   Set the printer name to: $PRINTER_NAME"
@@ -247,7 +312,7 @@ else
         hp-setup -i || true
     else
         echo "   Please add your printer using the CUPS web interface:"
-        echo "   http://$(hostname -I | awk '{print $1}'):631/admin"
+        echo "   http://${SERVER_IP}:631/admin"
         echo "   Or use: lpadmin -p $PRINTER_NAME -v <device-uri> -E"
         echo ""
         read -rp "Press Enter to continue after adding the printer, or Ctrl+C to exit..."
@@ -301,8 +366,7 @@ echo ""
 
 # ── Step 8: AirPrint/Mopria mDNS Setup ────────────────────────────────────
 echo "📡 Step 8: Setting up AirPrint/Mopria discovery..."
-systemctl enable avahi-daemon
-systemctl start avahi-daemon
+service_enable_start avahi-daemon
 
 if [ -f "$TARGET_DIR/scripts/setup-airprint.sh" ]; then
     export PRINTER_NAME
@@ -321,7 +385,7 @@ After=network.target cups.service
 Requires=cups.service
 
 [Service]
-Type=notify
+Type=simple
 User=root
 WorkingDirectory=/opt/print-queue-manager
 Environment="PATH=/opt/print-queue-manager/venv/bin"
@@ -374,15 +438,15 @@ echo "📋 Next Steps:"
 echo ""
 echo "1. If you haven't configured Authentik yet:"
 echo "   - Create OAuth2/OpenID Provider"
-echo "   - Set redirect URI to: http://$(hostname -I | awk '{print $1}'):5000/authorize"
+echo "   - Set redirect URI to: http://${SERVER_IP}:5000/authorize"
 echo "   - Copy Client ID and Secret to .env"
 echo "   - Restart: systemctl restart print-queue-manager"
 echo ""
 echo "2. Access the web interface:"
-echo "   http://$(hostname -I | awk '{print $1}'):5000"
+echo "   http://${SERVER_IP}:5000"
 echo ""
 echo "3. Configure client devices to print to:"
-echo "   http://$(hostname -I | awk '{print $1}'):631/printers/$PRINTER_NAME"
+echo "   http://${SERVER_IP}:631/printers/$PRINTER_NAME"
 echo ""
 if [ "$LDAP_ENABLED" = "true" ]; then
 echo "4. Test AD authentication:"

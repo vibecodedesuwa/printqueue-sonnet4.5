@@ -3,7 +3,7 @@ Description=Print Queue Manager
 After=network.target cups.service
 
 [Service]
-Type=notify
+Type=simple
 User=root
 WorkingDirectory=/opt/print-queue-manager
 Environment="PATH=/opt/print-queue-manager/venv/bin"
