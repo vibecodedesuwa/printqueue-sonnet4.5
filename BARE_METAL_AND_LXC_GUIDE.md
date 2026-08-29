@@ -848,10 +848,36 @@ printer pages at `/printers/`; `/cups` redirects there.
 
 1. Point the DNS record for `printq.echo.story` at the PrintQ server and allow
    inbound TCP ports 80 and 443.
-2. Install Caddy from its official distribution package.
-3. From the deployed PrintQ directory, run:
+2. Install the official Caddy package first so its service account and systemd
+   unit exist. Then install Go and `xcaddy` and replace only the packaged binary
+   with the custom AD CS build:
 
    ```bash
+   go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
+   bash scripts/build-caddy-certsrv.sh
+   ./caddy-certsrv list-modules | grep tls.issuance.certsrv
+   sudo systemctl stop caddy
+   sudo install -m 0755 ./caddy-certsrv /usr/bin/caddy
+   sudo restorecon -v /usr/bin/caddy 2>/dev/null || true
+   /usr/bin/caddy list-modules | grep tls.issuance.certsrv
+   ```
+
+   Do not run `xcaddy` without the `build` subcommand from `~/go/bin`. That is
+   plugin-development mode and fails there because the directory has no
+   `go.mod`.
+
+3. Run the setup once to create the AD CS environment template:
+
+   ```bash
+   sudo bash scripts/setup-caddy.sh
+   ```
+
+4. Edit `/etc/caddy/certsrv.env`, place the dedicated AD enrollment account's
+   keytab at `/etc/caddy/certsrv.keytab`, and restrict it to the Caddy service:
+
+   ```bash
+   sudo chown caddy:caddy /etc/caddy/certsrv.keytab
+   sudo chmod 0400 /etc/caddy/certsrv.keytab
    sudo bash scripts/setup-caddy.sh
    ```
 
@@ -875,6 +901,13 @@ If Authentik is enabled, register
 `https://printq.echo.story/authorize` as its redirect URI. If Collabora is
 enabled, set `WOPI_PUBLIC_URL=https://printq.echo.story` in `.env` and restart
 PrintQ.
+
+The supplied TLS configuration uses the `caddy-certsrv` keytab mode. Avoid its
+password mode: the plugin's validation code logs its configuration structure,
+which can expose a configured password in the Caddy journal. The AD CS URL must
+use the certificate server's DNS hostname so Kerberos can resolve the correct
+HTTP service principal. The account represented by the keytab must have Enroll
+permission for the AD CS `WebServer` certificate template.
 
 ---
 

@@ -11,8 +11,12 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PROJECT_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
 SOURCE_CONFIG="$PROJECT_DIR/config/caddy/Caddyfile"
 TARGET_CONFIG=/etc/caddy/Caddyfile
+SOURCE_CERTSRV_ENV="$PROJECT_DIR/config/caddy/certsrv.env.example"
+CERTSRV_ENV=/etc/caddy/certsrv.env
 SOURCE_DROPIN="$PROJECT_DIR/config/systemd/print-queue-manager-caddy.conf"
 TARGET_DROPIN=/etc/systemd/system/print-queue-manager.service.d/20-caddy-local-bind.conf
+CADDY_DROPIN_SOURCE="$PROJECT_DIR/config/systemd/caddy-certsrv.conf"
+CADDY_DROPIN_TARGET=/etc/systemd/system/caddy.service.d/20-certsrv-environment.conf
 ENV_FILE=${1:-/opt/print-queue-manager/.env}
 
 if ! command -v caddy >/dev/null 2>&1; then
@@ -22,12 +26,50 @@ if ! command -v caddy >/dev/null 2>&1; then
     exit 1
 fi
 
-if [ ! -f "$SOURCE_CONFIG" ] || [ ! -f "$SOURCE_DROPIN" ]; then
+if ! caddy list-modules | grep -qx 'tls.issuance.certsrv'; then
+    echo "❌ This Caddy binary does not contain tls.issuance.certsrv." >&2
+    echo "   Build it first with: bash scripts/build-caddy-certsrv.sh" >&2
+    exit 1
+fi
+
+if [ ! -f "$SOURCE_CONFIG" ] || [ ! -f "$SOURCE_CERTSRV_ENV" ] || \
+   [ ! -f "$SOURCE_DROPIN" ] || [ ! -f "$CADDY_DROPIN_SOURCE" ]; then
     echo "❌ The repository's Caddy configuration files are incomplete." >&2
     exit 1
 fi
 
 install -d -m 0755 /etc/caddy
+if [ ! -f "$CERTSRV_ENV" ]; then
+    install -m 0600 "$SOURCE_CERTSRV_ENV" "$CERTSRV_ENV"
+    echo "❌ Created $CERTSRV_ENV. Edit it for your AD CS server, then rerun this script." >&2
+    exit 1
+fi
+
+# This is a root-owned configuration file. Export its values so the same
+# environment-variable expansion used by systemd is available to validation.
+set -a
+# shellcheck disable=SC1090
+. "$CERTSRV_ENV"
+set +a
+
+for required_name in CERTSRV_URL CERTSRV_REALM CERTSRV_USERNAME CERTSRV_KEYTAB_PATH; do
+    if [ -z "${!required_name:-}" ]; then
+        echo "❌ $required_name is missing from $CERTSRV_ENV" >&2
+        exit 1
+    fi
+done
+
+if [ ! -r "$CERTSRV_KEYTAB_PATH" ]; then
+    echo "❌ Caddy's AD keytab is not readable: $CERTSRV_KEYTAB_PATH" >&2
+    exit 1
+fi
+
+if id caddy >/dev/null 2>&1 && ! runuser -u caddy -- test -r "$CERTSRV_KEYTAB_PATH"; then
+    echo "❌ The caddy service account cannot read $CERTSRV_KEYTAB_PATH" >&2
+    echo "   Run: chown caddy:caddy '$CERTSRV_KEYTAB_PATH' && chmod 0400 '$CERTSRV_KEYTAB_PATH'" >&2
+    exit 1
+fi
+
 if [ -f "$TARGET_CONFIG" ] && ! cmp -s "$SOURCE_CONFIG" "$TARGET_CONFIG"; then
     backup_file="${TARGET_CONFIG}.backup.$(date +%Y%m%d-%H%M%S)"
     cp -a "$TARGET_CONFIG" "$backup_file"
@@ -37,6 +79,9 @@ fi
 install -m 0644 "$SOURCE_CONFIG" "$TARGET_CONFIG"
 caddy fmt --overwrite "$TARGET_CONFIG"
 caddy validate --config "$TARGET_CONFIG" --adapter caddyfile
+
+install -d -m 0755 "$(dirname "$CADDY_DROPIN_TARGET")"
+install -m 0644 "$CADDY_DROPIN_SOURCE" "$CADDY_DROPIN_TARGET"
 
 # Prevent clients from bypassing Caddy after PrintQ starts trusting forwarded
 # HTTPS/host headers. This drop-in is reversible and leaves CUPS port 631 alone.
@@ -56,8 +101,9 @@ else
     echo "⚠️  $ENV_FILE was not found; set TRUST_PROXY=true in PrintQ's environment manually."
 fi
 
-systemctl enable --now caddy
-systemctl reload caddy
+systemctl daemon-reload
+systemctl enable caddy
+systemctl restart caddy
 
 if command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
     firewall-cmd --permanent --add-service=http

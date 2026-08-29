@@ -4,6 +4,19 @@
 printq.echo.story {
 	encode zstd gzip
 
+	# Request this site's certificate from Microsoft AD CS through the custom
+	# tls.issuance.certsrv module. A keytab avoids exposing an AD password in the
+	# Caddy process environment or in this plugin's validation log output.
+	tls {
+		key_type rsa2048
+		issuer certsrv {
+			certsrv_url {$CERTSRV_URL}
+			realm {$CERTSRV_REALM}
+			username {$CERTSRV_USERNAME}
+			keytab_path {$CERTSRV_KEYTAB_PATH:/etc/caddy/certsrv.keytab}
+		}
+	}
+
 	# Friendly shortcut. CUPS generates root-relative links, so keep its native
 	# /printers path instead of mounting it under /cups.
 	@cupsLanding path /cups /cups/
