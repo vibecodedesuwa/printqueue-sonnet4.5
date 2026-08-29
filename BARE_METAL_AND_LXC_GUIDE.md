@@ -249,7 +249,7 @@ lpstat -p YOUR_PRINTER_NAME
 
 > *`install.sh` automates this in Step 7 when `LDAP_ENABLED=true`.*
 
-This step configures CUPS to authenticate IPP print requests against Active Directory. After this, when Android/iOS/Windows users print to the printer, they will be prompted for their AD username and password.
+This step configures CUPS to authenticate IPP print requests against Active Directory. Compatible AirPrint/Mopria/Linux/macOS clients can prompt for an AD username and password. The Microsoft IPP Class Driver does not reliably prompt for CUPS HTTP Basic credentials; Windows requires a Samba AD share, Kerberos/Negotiate, or a separate trusted unauthenticated queue.
 
 **Skip this section if you don't use Active Directory.**
 
@@ -331,6 +331,8 @@ systemctl restart cups
 
 RHEL-family systems use SSSD instead of the removed `nss-pam-ldapd` stack. The automated `setup-cups-ldap.sh` script installs `sssd-ldap`, writes a protected SSSD configuration, and selects the SSSD `authselect` profile. When `LDAP_USE_SSL=false`, the script uses StartTLS because SSSD does not permit password authentication over an unencrypted LDAP connection.
 
+Set `LDAP_TEST_USER` to a real AD `sAMAccountName`. The setup script verifies the LDAP bind and search base before changing SSSD, validates the generated configuration, checks that the domain is online, and confirms that this test account resolves through NSS.
+
 If the machine is already joined to AD/IdM or has a custom `/etc/sssd/sssd.conf`, the script refuses to overwrite it. In that case, verify `getent passwd <ad-user>` works and only apply the CUPS policy:
 
 ```bash
@@ -407,6 +409,7 @@ LDAP_BASE_DN=DC=domain,DC=local
 LDAP_BIND_DN=CN=print-service,OU=Services,DC=domain,DC=local
 LDAP_BIND_PASSWORD=your-ad-password
 LDAP_DOMAIN=domain.local
+LDAP_TEST_USER=an-ad-samaccountname
 LDAP_AD_DOMAIN_SID=S-1-5-21-your-real-domain-sid
 LDAP_TLS_REQCERT=demand
 
@@ -532,6 +535,8 @@ The printer auto-appears in the Print dialog. If AD is enabled, AirPrint will pr
 Android 8+ auto-discovers via Default Print Service. If AD is enabled, the phone will prompt for AD username/password. See `CLIENT_PRINT_GUIDE.md`.
 
 ### Windows
+
+The command below is suitable for a printer policy that does not require HTTP Basic authentication. The Microsoft IPP Class Driver may install an authenticated queue but then fail to submit because it does not reliably display a CUPS Basic credential prompt. Use Samba for seamless Windows AD authentication.
 
 ```powershell
 # Add printer via IPP (replace YOUR_PRINTER_NAME with your actual printer name)
@@ -744,7 +749,7 @@ systemctl restart print-queue-manager
 Your print queue management system is now ready! Users can:
 
 1. ✅ Print from any device (iPhone, Android, Windows, macOS, Linux)
-2. ✅ Authenticate with AD credentials at the IPP layer (if AD enabled)
+2. ✅ Authenticate with AD credentials at the IPP layer on compatible clients (if AD enabled)
 3. ✅ Log in with Authentik SSO or Active Directory
 4. ✅ See their jobs in the web dashboard
 5. ✅ Upload files directly via drag-and-drop or QR code

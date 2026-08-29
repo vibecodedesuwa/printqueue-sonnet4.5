@@ -75,7 +75,7 @@ When AD is enabled on CUPS, the phone will prompt for your AD username/password 
 6. Hostname or IP: `http://YOUR-SERVER-IP:631/printers/YOUR_PRINTER_NAME`
 7. Follow the prompts to finish setup
 
-> **Note on AD Authentication:** When Active Directory is enabled, Windows will prompt for your domain credentials when adding the printer or when you print for the first time.
+> **Windows AD limitation:** The Microsoft IPP Class Driver does not reliably prompt for credentials when CUPS returns an HTTP Basic challenge. Direct authenticated IPP therefore works on clients such as AirPrint/Mopria, but should not be relied on for Windows AD sign-in. For Windows, use a Samba AD-member print share (recommended for seamless domain authentication), CUPS Kerberos/Negotiate with a keytab, or a separate unauthenticated IPP queue on a trusted network.
 
 ### Alternatively, enable Internet Printing Client
 
@@ -159,5 +159,5 @@ When you print from a phone via AirPrint/Mopria, the system may not know who you
 | Jobs stuck in queue             | Check if the CUPS server is running (`docker ps`)              |
 | "Unclaimed" job                 | Log into web dashboard and claim it                            |
 | File type not supported         | Convert to PDF first — supported: PDF, PNG, JPG, DOCX, TXT     |
-| Windows can't connect           | Ensure Internet Printing Client is enabled                     |
+| Windows can't connect           | Microsoft IPP does not reliably prompt for CUPS Basic credentials; use a Samba AD share, Kerberos/Negotiate, or a trusted unauthenticated Windows queue |
 | AD credential prompt not appearing | Check `LDAP_ENABLED=true`; verify `nslcd` (Debian/Ubuntu) or `sssd` (Fedora/CentOS/AlmaLinux) is running |

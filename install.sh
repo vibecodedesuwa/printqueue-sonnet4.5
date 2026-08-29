@@ -27,7 +27,7 @@ load_install_settings() {
             \'*\') value=${value#\'}; value=${value%\'} ;;
         esac
         case "$key" in
-            PRINTER_NAME|LDAP_ENABLED|LDAP_HOST|LDAP_PORT|LDAP_USE_SSL|LDAP_BASE_DN|LDAP_BIND_DN|LDAP_BIND_PASSWORD|LDAP_DOMAIN|LDAP_AD_DOMAIN_SID|LDAP_USER_SEARCH_FILTER|LDAP_TLS_REQCERT|CUPS_USER|CUPS_PASSWORD)
+            PRINTER_NAME|LDAP_ENABLED|LDAP_HOST|LDAP_PORT|LDAP_USE_SSL|LDAP_BASE_DN|LDAP_BIND_DN|LDAP_BIND_PASSWORD|LDAP_DOMAIN|LDAP_TEST_USER|LDAP_AD_DOMAIN_SID|LDAP_USER_SEARCH_FILTER|LDAP_TLS_REQCERT|CUPS_USER|CUPS_PASSWORD)
                 printf -v "$key" '%s' "$value"
                 export "$key"
                 ;;
@@ -283,6 +283,7 @@ LDAP_BASE_DN=DC=domain,DC=local
 LDAP_BIND_DN=CN=print-service,OU=Services,DC=domain,DC=local
 LDAP_BIND_PASSWORD=change-me
 LDAP_DOMAIN=domain.local
+LDAP_TEST_USER=
 LDAP_AD_DOMAIN_SID=
 LDAP_USER_SEARCH_FILTER=(&(objectClass=user)(sAMAccountName={username}))
 LDAP_TLS_REQCERT=demand
