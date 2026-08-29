@@ -28,7 +28,7 @@ load_ldap_settings() {
             \'*\') value=${value#\'}; value=${value%\'} ;;
         esac
         case "$key" in
-            LDAP_HOST|LDAP_PORT|LDAP_USE_SSL|LDAP_BASE_DN|LDAP_BIND_DN|LDAP_BIND_PASSWORD|LDAP_DOMAIN|LDAP_TEST_USER|LDAP_AD_DOMAIN_SID|LDAP_TLS_REQCERT|PRINTER_NAME)
+            LDAP_HOST|LDAP_PORT|LDAP_USE_SSL|LDAP_BASE_DN|LDAP_BIND_DN|LDAP_BIND_PASSWORD|LDAP_DOMAIN|LDAP_TEST_USER|LDAP_AD_DOMAIN_SID|LDAP_TLS_REQCERT|PRINTER_NAME|SAMBA_ENABLED)
                 if [ -z "${!key+x}" ]; then
                     printf -v "$key" '%s' "$value"
                     export "$key"
@@ -51,6 +51,14 @@ LDAP_TEST_USER="${LDAP_TEST_USER:-}"
 LDAP_AD_DOMAIN_SID="${LDAP_AD_DOMAIN_SID:-}"
 LDAP_TLS_REQCERT="${LDAP_TLS_REQCERT:-demand}"
 PRINTER_NAME="${PRINTER_NAME:-}"
+SAMBA_ENABLED="${SAMBA_ENABLED:-false}"
+
+if [ "$SAMBA_ENABLED" = "true" ]; then
+    echo "❌ SAMBA_ENABLED=true: do not configure the separate SSSD/nslcd provider."
+    echo "   A Samba AD member must use Winbind for host PAM/NSS integration. Run:"
+    echo "   sudo bash '$SCRIPT_DIR/setup-windows-samba.sh' '$ENV_FILE'"
+    exit 1
+fi
 
 if [ -z "$LDAP_HOST" ] || [ -z "$LDAP_BASE_DN" ]; then
     echo "❌ LDAP_HOST and LDAP_BASE_DN must be set in .env or the environment."

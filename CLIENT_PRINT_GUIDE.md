@@ -65,6 +65,36 @@ When AD is enabled on CUPS, the phone will prompt for your AD username/password 
 
 ## 🪟 Windows 10 / 11
 
+### Recommended: Samba AD Print Share
+
+For domain-joined Windows computers, use the Samba share configured by `setup-windows-samba.sh`. This avoids the Microsoft IPP Class Driver's CUPS Basic-authentication limitation.
+
+1. Press **Win+R**.
+2. Enter `\\printq.your-domain.local\PrintQ`.
+3. Windows uses the signed-in domain identity automatically.
+4. If Windows requests a driver, select/install the driver for the physical printer. The share uses client-side rendering and does not distribute a driver package.
+
+Administrators can also connect it from PowerShell:
+
+```powershell
+Add-Printer -ConnectionName "\\printq.your-domain.local\PrintQ"
+```
+
+If Windows reports that it cannot connect or cannot obtain a driver, install the
+printer manufacturer's Windows driver first, then add it with a local SMB port:
+
+1. Open **Control Panel → Devices and Printers → Add a printer**.
+2. Select **The printer that I want isn't listed**.
+3. Select **Add a local printer or network printer with manual settings**.
+4. Choose **Create a new port → Local Port**.
+5. Enter `\\printq.your-domain.local\PrintQ` as the port name.
+6. Select the installed manufacturer driver and finish the wizard.
+
+This local-port method still authenticates to Samba with the signed-in domain
+identity; it only keeps Windows from trying to download a driver from PrintQ.
+
+Jobs enter the dedicated `<printer>_windows` CUPS queue in the held state and appear in the normal PrintQ dashboard under the authenticated AD username.
+
 ### Add Printer via IPP
 
 1. Open **Settings → Bluetooth & Devices → Printers & Scanners**
@@ -75,7 +105,7 @@ When AD is enabled on CUPS, the phone will prompt for your AD username/password 
 6. Hostname or IP: `http://YOUR-SERVER-IP:631/printers/YOUR_PRINTER_NAME`
 7. Follow the prompts to finish setup
 
-> **Windows AD limitation:** The Microsoft IPP Class Driver does not reliably prompt for credentials when CUPS returns an HTTP Basic challenge. Direct authenticated IPP therefore works on clients such as AirPrint/Mopria, but should not be relied on for Windows AD sign-in. For Windows, use a Samba AD-member print share (recommended for seamless domain authentication), CUPS Kerberos/Negotiate with a keytab, or a separate unauthenticated IPP queue on a trusted network.
+> **Windows AD limitation:** Direct IPP is suitable only for a queue that does not require HTTP Basic authentication. Use the Samba share above for seamless Windows AD sign-in.
 
 ### Alternatively, enable Internet Printing Client
 

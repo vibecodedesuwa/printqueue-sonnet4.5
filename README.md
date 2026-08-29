@@ -12,6 +12,7 @@ A modern, enterprise-grade print queue management system built with Flask, Docke
 | 🔐 **Dual Authentication**     | Native support for **Authentik SSO (OpenID Connect)** and **Active Directory (LDAP)** authentication  |
 | 🔗 **AD/CUPS Identity Binding** | Automatically binds `user`, `DOMAIN\\user`, and same-domain `user@domain` print jobs to one account   |
 | 🪪 **AD-Integrated IPP**       | Android/iOS users authenticate with AD credentials at the IPP layer                                   |
+| 🪟 **Windows AD Print Share**  | Optional Samba/Winbind share provides seamless authentication for domain-joined Windows clients       |
 | 🌐 **Multi-Lingual (EN/TH)**   | Dynamic English 🇺🇸 & Thai 🇹🇭 language switching across all pages & modals                           |
 | 📱 **QR Mobile Quick Print**   | Scan QR code with iOS/Android camera to instantly upload documents/photos for printing                |
 | 📝 **Collabora + A4 Editors**| Full Collabora Writer integration through signed WOPI endpoints, plus a lightweight A4 fallback and direct print submission |
@@ -58,7 +59,8 @@ printqueue-sonnet4.5/
 ├── scripts/
 │   ├── cups-entrypoint.sh     # Container startup script with AD/LDAP PAM configuration
 │   ├── setup-airprint.sh      # AirPrint/Mopria mDNS advertisement setup
-│   └── setup-cups-ldap.sh     # AD/LDAP PAM setup for bare-metal
+│   ├── setup-cups-ldap.sh     # AD/LDAP PAM setup for bare-metal
+│   └── setup-windows-samba.sh # Windows SMB printing through Samba/Winbind
 ├── docker-compose.yml         # Container orchestration (PrintQ + CUPS)
 ├── Dockerfile                 # Multi-stage Python 3.11 container definition
 ├── DOCKER_GUIDE.md            # Detailed Docker Deployment & Operations Guide
@@ -117,6 +119,13 @@ docker compose up -d --build
 | `LDAP_DOMAIN`             |                       | AD DNS domain used to normalize CUPS/LDAP identities  |
 | `LDAP_AD_DOMAIN_SID`      |                       | AD domain SID required for Debian/Ubuntu host CUPS auth |
 | `LDAP_TLS_REQCERT`        | `demand`              | LDAP TLS certificate policy for host CUPS authentication |
+| `SAMBA_ENABLED`           | `false`               | Create an AD-authenticated Windows SMB print share       |
+| `SAMBA_REALM`             |                       | AD DNS realm, for example `echo.story`                   |
+| `SAMBA_WORKGROUP`         |                       | AD NetBIOS name, for example `ECHO`                      |
+| `SAMBA_HOSTNAME`          |                       | Stable PrintQ FQDN inside the AD realm                   |
+| `SAMBA_JOIN_USER`         | `Administrator`       | AD account used interactively to join the server         |
+| `SAMBA_SHARE_NAME`        | `PrintQ`              | Windows printer share name                               |
+| `SAMBA_WINDOWS_QUEUE`     | `<printer>_windows`   | Dedicated locally submitted held CUPS queue              |
 | `PRINTER_NAME`            | `HP_Smart_Tank_515`   | Target CUPS printer name (must match actual CUPS printer name, e.g. `lpstat -p`) |
 | `CUPS_USER`               | `print`               | CUPS service account used by the web application      |
 | `CUPS_PASSWORD`           | `print`               | CUPS service password; change this before deployment  |

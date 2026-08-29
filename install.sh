@@ -27,7 +27,7 @@ load_install_settings() {
             \'*\') value=${value#\'}; value=${value%\'} ;;
         esac
         case "$key" in
-            PRINTER_NAME|LDAP_ENABLED|LDAP_HOST|LDAP_PORT|LDAP_USE_SSL|LDAP_BASE_DN|LDAP_BIND_DN|LDAP_BIND_PASSWORD|LDAP_DOMAIN|LDAP_TEST_USER|LDAP_AD_DOMAIN_SID|LDAP_USER_SEARCH_FILTER|LDAP_TLS_REQCERT|CUPS_USER|CUPS_PASSWORD)
+            PRINTER_NAME|LDAP_ENABLED|LDAP_HOST|LDAP_PORT|LDAP_USE_SSL|LDAP_BASE_DN|LDAP_BIND_DN|LDAP_BIND_PASSWORD|LDAP_DOMAIN|LDAP_TEST_USER|LDAP_AD_DOMAIN_SID|LDAP_USER_SEARCH_FILTER|LDAP_TLS_REQCERT|SAMBA_ENABLED|SAMBA_REALM|SAMBA_WORKGROUP|SAMBA_HOSTNAME|SAMBA_JOIN_USER|SAMBA_SHARE_NAME|SAMBA_WINDOWS_QUEUE|CUPS_USER|CUPS_PASSWORD)
                 printf -v "$key" '%s' "$value"
                 export "$key"
                 ;;
@@ -288,6 +288,15 @@ LDAP_AD_DOMAIN_SID=
 LDAP_USER_SEARCH_FILTER=(&(objectClass=user)(sAMAccountName={username}))
 LDAP_TLS_REQCERT=demand
 
+# Windows SMB printing with seamless AD authentication
+SAMBA_ENABLED=false
+SAMBA_REALM=domain.local
+SAMBA_WORKGROUP=DOMAIN
+SAMBA_HOSTNAME=printq.domain.local
+SAMBA_JOIN_USER=Administrator
+SAMBA_SHARE_NAME=PrintQ
+SAMBA_WINDOWS_QUEUE=
+
 # CUPS service account (used by the web app to manage jobs — always needed)
 CUPS_USER=print
 CUPS_PASSWORD=$(openssl rand -hex 16)
@@ -420,8 +429,9 @@ echo ""
 # ── Step 7: AD/LDAP CUPS Authentication (Optional) ────────────────────────
 echo "🔐 Step 7: AD/LDAP authentication for CUPS..."
 LDAP_ENABLED="${LDAP_ENABLED:-false}"
+SAMBA_ENABLED="${SAMBA_ENABLED:-false}"
 
-if [ "$LDAP_ENABLED" = "true" ]; then
+if [ "$LDAP_ENABLED" = "true" ] && [ "$SAMBA_ENABLED" != "true" ]; then
     echo "   LDAP_ENABLED=true detected — configuring AD authentication for CUPS IPP..."
     echo ""
     echo "   This will allow Android/iOS devices to authenticate with AD credentials"
@@ -433,6 +443,9 @@ if [ "$LDAP_ENABLED" = "true" ]; then
     else
         echo "❌ setup-cups-ldap.sh not found — run it manually later"
     fi
+elif [ "$LDAP_ENABLED" = "true" ]; then
+    echo "   SAMBA_ENABLED=true — Samba/Winbind will provide PAM/NSS AD authentication."
+    echo "   Skipping the separate SSSD/nslcd configuration."
 else
     echo "   LDAP_ENABLED=false — skipping AD authentication setup."
     echo "   IPP printing will not require authentication (jobs appear as unclaimed)."
@@ -442,6 +455,20 @@ else
         lpadmin -p "$PRINTER_NAME" -o printer-op-policy=default
         echo "   Printer policy set to 'default'"
     fi
+fi
+echo ""
+
+# ── Step 7b: Windows SMB/AD Printing (Optional) ───────────────────────────
+echo "🪟 Step 7b: Windows SMB/AD printing..."
+if [ "$SAMBA_ENABLED" = "true" ]; then
+    if [ -f "$TARGET_DIR/scripts/setup-windows-samba.sh" ]; then
+        bash "$TARGET_DIR/scripts/setup-windows-samba.sh" "$TARGET_DIR/.env"
+    else
+        echo "❌ setup-windows-samba.sh not found — update the deployment and rerun"
+        exit 1
+    fi
+else
+    echo "   SAMBA_ENABLED=false — skipping the Windows SMB print share."
 fi
 echo ""
 
@@ -515,6 +542,10 @@ echo "📋 Configuration Summary:"
 echo "   Printer:       $PRINTER_NAME"
 echo "   AD/LDAP Auth:  $LDAP_ENABLED"
 echo "   Local Office:  $LOCAL_OFFICE_CONVERSION"
+echo "   Windows SMB:   $SAMBA_ENABLED"
+if [ "$SAMBA_ENABLED" = "true" ]; then
+    printf '   Windows Share: \\\\%s\\%s\n' "$SAMBA_HOSTNAME" "${SAMBA_SHARE_NAME:-PrintQ}"
+fi
 echo ""
 echo "📋 Next Steps:"
 echo ""

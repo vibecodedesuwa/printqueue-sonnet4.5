@@ -358,6 +358,66 @@ getent passwd <your-ad-username>
 > lpadmin -p YOUR_PRINTER_NAME -o printer-op-policy=default
 > ```
 
+### B.4.1 — Windows AD Printing with Samba/Winbind
+
+The Microsoft IPP Class Driver does not reliably handle CUPS HTTP Basic credential prompts. PrintQ therefore provides an optional Samba domain-member path for Windows. Samba authenticates the signed-in Windows domain user and submits the job locally into a separate held CUPS queue; the original queue keeps its authenticated IPP policy for AirPrint/Mopria.
+
+Prerequisites:
+
+- The PrintQ server must use the AD DNS server.
+- Time must be synchronized with the domain.
+- The server needs a stable FQDN inside the AD realm, such as `printq.echo.story`.
+- An AD account must have permission to join a computer to the domain.
+- Windows clients must have a suitable local driver for the physical printer.
+
+Configure `.env`:
+
+```env
+SAMBA_ENABLED=true
+SAMBA_REALM=echo.story
+SAMBA_WORKGROUP=ECHO
+SAMBA_HOSTNAME=printq.echo.story
+SAMBA_JOIN_USER=Administrator
+SAMBA_SHARE_NAME=PrintQ
+SAMBA_WINDOWS_QUEUE=es_non01_st515_01_windows
+LDAP_TEST_USER=kritthapath
+```
+
+Run on an existing installation—no reinstall is required:
+
+```bash
+cd /opt/print-queue-manager
+sudo bash scripts/setup-windows-samba.sh
+```
+
+If `/opt/print-queue-manager` was copied by an older installer and is not a Git
+checkout, update your original clone with `git pull`, then copy the updated
+`scripts` directory and `install.sh` into `/opt/print-queue-manager` before
+running the command. Existing application data and the database are not removed.
+
+The domain join prompts for the join account password; it is not stored in `.env`. On RHEL-family systems, the script switches host PAM/NSS integration from SSSD to Winbind because Winbind is the supported identity provider for a Samba AD-member server. The web application's direct LDAP login remains unchanged.
+
+Verify:
+
+```bash
+sudo net ads testjoin
+sudo wbinfo --check-secret
+getent passwd kritthapath
+lpstat -p es_non01_st515_01_windows
+sudo testparm -s
+```
+
+Connect Windows to:
+
+```text
+\\printq.echo.story\PrintQ
+```
+
+Remove the old authenticated IPP printer from Windows first. If Windows cannot
+attach the share because PrintQ does not host a Windows driver, install the
+physical printer's vendor driver and create a **Local Port** whose name is the
+same UNC path. See `CLIENT_PRINT_GUIDE.md` for the click-by-click procedure.
+
 ---
 
 ## B.5 — Install PrintQ Web App
