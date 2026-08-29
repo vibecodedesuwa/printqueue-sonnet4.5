@@ -17,6 +17,8 @@ SOURCE_DROPIN="$PROJECT_DIR/config/systemd/print-queue-manager-caddy.conf"
 TARGET_DROPIN=/etc/systemd/system/print-queue-manager.service.d/20-caddy-local-bind.conf
 CADDY_DROPIN_SOURCE="$PROJECT_DIR/config/systemd/caddy-certsrv.conf"
 CADDY_DROPIN_TARGET=/etc/systemd/system/caddy.service.d/20-certsrv-environment.conf
+CADDY_SERVICE_SOURCE="$PROJECT_DIR/config/systemd/caddy.service"
+CADDY_SERVICE_TARGET=/etc/systemd/system/caddy.service
 ENV_FILE=${1:-/opt/print-queue-manager/.env}
 
 if ! command -v caddy >/dev/null 2>&1; then
@@ -33,12 +35,35 @@ if ! caddy list-modules | grep -qx 'tls.issuance.certsrv'; then
 fi
 
 if [ ! -f "$SOURCE_CONFIG" ] || [ ! -f "$SOURCE_CERTSRV_ENV" ] || \
-   [ ! -f "$SOURCE_DROPIN" ] || [ ! -f "$CADDY_DROPIN_SOURCE" ]; then
+   [ ! -f "$SOURCE_DROPIN" ] || [ ! -f "$CADDY_DROPIN_SOURCE" ] || \
+   [ ! -f "$CADDY_SERVICE_SOURCE" ]; then
     echo "❌ The repository's Caddy configuration files are incomplete." >&2
     exit 1
 fi
 
-install -d -m 0755 /etc/caddy
+# A source-built xcaddy binary does not install the service account or systemd
+# unit that distribution packages normally provide. Create only what is absent,
+# leaving a packaged Caddy installation untouched.
+if ! getent group caddy >/dev/null 2>&1; then
+    groupadd --system caddy
+fi
+
+if ! id caddy >/dev/null 2>&1; then
+    nologin_shell=$(command -v nologin || printf '/sbin/nologin')
+    useradd --system --gid caddy --create-home --home-dir /var/lib/caddy \
+        --shell "$nologin_shell" --comment "Caddy web server" caddy
+fi
+
+install -d -o caddy -g caddy -m 0750 /var/lib/caddy
+install -d -o root -g caddy -m 0755 /etc/caddy
+
+if ! systemctl cat caddy.service >/dev/null 2>&1; then
+    install -m 0644 "$CADDY_SERVICE_SOURCE" "$CADDY_SERVICE_TARGET"
+    command -v restorecon >/dev/null 2>&1 && restorecon -v "$CADDY_SERVICE_TARGET" >/dev/null 2>&1 || true
+    systemctl daemon-reload
+    echo "✅ Installed the Caddy systemd service for the xcaddy build"
+fi
+
 if [ ! -f "$CERTSRV_ENV" ]; then
     install -m 0600 "$SOURCE_CERTSRV_ENV" "$CERTSRV_ENV"
     echo "❌ Created $CERTSRV_ENV. Edit it for your AD CS server, then rerun this script." >&2

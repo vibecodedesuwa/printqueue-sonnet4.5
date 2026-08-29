@@ -848,15 +848,15 @@ printer pages at `/printers/`; `/cups` redirects there.
 
 1. Point the DNS record for `printq.echo.story` at the PrintQ server and allow
    inbound TCP ports 80 and 443.
-2. Install the official Caddy package first so its service account and systemd
-   unit exist. Then install Go and `xcaddy` and replace only the packaged binary
-   with the custom AD CS build:
+2. Install Go and `xcaddy`, then build and install the custom AD CS binary. The
+   setup script creates the `caddy` service account and systemd unit when no
+   distribution package has provided them:
 
    ```bash
    go install github.com/caddyserver/xcaddy/cmd/xcaddy@latest
    bash scripts/build-caddy-certsrv.sh
    ./caddy-certsrv list-modules | grep tls.issuance.certsrv
-   sudo systemctl stop caddy
+   sudo systemctl stop caddy 2>/dev/null || true
    sudo install -m 0755 ./caddy-certsrv /usr/bin/caddy
    sudo restorecon -v /usr/bin/caddy 2>/dev/null || true
    /usr/bin/caddy list-modules | grep tls.issuance.certsrv
@@ -882,9 +882,10 @@ printer pages at `/printers/`; `/cups` redirects there.
    ```
 
 The setup backs up an existing `/etc/caddy/Caddyfile`, validates the new file
-before reloading Caddy, enables trusted proxy headers, and binds PrintQ's port
-5000 to localhost so clients cannot bypass the proxy. On firewalld systems it
-opens ports 80/443 and removes the old public port-5000 rule.
+before reloading Caddy, installs a systemd service for source-built Caddy when
+needed, enables trusted proxy headers, and binds PrintQ's port 5000 to localhost
+so clients cannot bypass the proxy. On firewalld systems it opens ports 80/443
+and removes the old public port-5000 rule.
 
 Then use:
 
