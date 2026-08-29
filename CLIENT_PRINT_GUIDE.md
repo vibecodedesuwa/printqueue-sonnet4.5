@@ -17,6 +17,20 @@ AirPrint is built into iOS — **no app needed**.
 
 > **Not seeing the printer?** Make sure mDNS (UDP 5353) traffic is not blocked by your router/firewall.
 
+### USB/HPLIP paper sizes
+
+USB printers with manually loaded trays may not sense their paper size. If
+CUPS reports only one stale `media-ready` value, iOS can hide other supported
+sizes. Set `AIRPRINT_READY_PAPER_SIZES` in `.env` and rerun:
+
+```bash
+sudo bash scripts/setup-airprint.sh
+```
+
+The HP Smart Tank 515 defaults report A4, A5, A6, B5, Letter, Legal, 4x6,
+5x7, and DL Envelope as potentially ready. `AIRPRINT_DUPLEX=false` is
+intentional because this model provides manual rather than automatic duplex.
+
 ---
 
 ## 🤖 Android (Mopria / Default Print Service)

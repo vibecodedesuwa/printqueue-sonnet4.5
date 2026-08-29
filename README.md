@@ -126,6 +126,9 @@ docker compose up -d --build
 | `SAMBA_JOIN_USER`         | `Administrator`       | AD account used interactively to join the server         |
 | `SAMBA_SHARE_NAME`        | `PrintQ`              | Windows printer share name                               |
 | `SAMBA_WINDOWS_QUEUE`     | `<printer>_windows`   | Dedicated locally submitted held CUPS queue              |
+| `AIRPRINT_READY_PAPER_SIZES` | common HP sizes   | Sizes reported ready when a USB/HPLIP tray cannot sense media |
+| `AIRPRINT_DUPLEX`         | `false`               | Advertise hardware duplex capability to AirPrint          |
+| `AIRPRINT_PAPER_MAX`      | `legal-A4`            | AirPrint maximum-paper classification                     |
 | `PRINTER_NAME`            | `HP_Smart_Tank_515`   | Target CUPS printer name (must match actual CUPS printer name, e.g. `lpstat -p`) |
 | `CUPS_USER`               | `print`               | CUPS service account used by the web application      |
 | `CUPS_PASSWORD`           | `print`               | CUPS service password; change this before deployment  |

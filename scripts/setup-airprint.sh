@@ -6,10 +6,57 @@
 
 set -e
 
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+
+load_airprint_settings() {
+    local line key value
+    [ -f "$1" ] || return 0
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%$'\r'}"
+        case "$line" in ''|'#'*) continue ;; esac
+        key=${line%%=*}
+        [ "$key" = "$line" ] && continue
+        value=${line#*=}
+        case "$value" in
+            \"*\") value=${value#\"}; value=${value%\"} ;;
+            \'*\') value=${value#\'}; value=${value%\'} ;;
+        esac
+        case "$key" in
+            PRINTER_NAME|CUPS_HOST|CUPS_PORT|AIRPRINT_READY_PAPER_SIZES|AIRPRINT_DUPLEX|AIRPRINT_PAPER_MAX)
+                if [ -z "${!key+x}" ]; then
+                    printf -v "$key" '%s' "$value"
+                    export "$key"
+                fi
+                ;;
+        esac
+    done < "$1"
+}
+
+load_airprint_settings "${1:-$SCRIPT_DIR/../.env}"
+
 PRINTER_NAME="${PRINTER_NAME:-HP_Smart_Tank_515}"
 CUPS_HOST="${CUPS_HOST:-localhost}"
 CUPS_PORT="${CUPS_PORT:-631}"
+AIRPRINT_READY_PAPER_SIZES="${AIRPRINT_READY_PAPER_SIZES:-A4,A5,A6,B5,Letter,Legal,4x6in,5x7in,EnvelopeDL}"
+AIRPRINT_DUPLEX="${AIRPRINT_DUPLEX:-false}"
+AIRPRINT_PAPER_MAX="${AIRPRINT_PAPER_MAX:-legal-A4}"
 AVAHI_SERVICE_DIR="/etc/avahi/services"
+
+case "$AIRPRINT_DUPLEX" in
+    true) AIRPRINT_DUPLEX_TXT=T ;;
+    false) AIRPRINT_DUPLEX_TXT=F ;;
+    *)
+        echo "❌ AIRPRINT_DUPLEX must be true or false." >&2
+        exit 1
+        ;;
+esac
+case "$AIRPRINT_PAPER_MAX" in
+    '<legal-A4'|legal-A4|tabloid-A3|isoC-A2|'>isoC-A2') ;;
+    *)
+        echo "❌ AIRPRINT_PAPER_MAX is not a valid AirPrint PaperMax value." >&2
+        exit 1
+        ;;
+esac
 
 echo "🖨️  Setting up AirPrint/IPP Everywhere for printer: $PRINTER_NAME"
 
@@ -32,6 +79,13 @@ lpadmin -p "$PRINTER_NAME" \
     -o printer-is-shared=true \
     -o printer-op-policy=authenticated \
     -o job-hold-until-default=indefinite
+
+# USB/HPLIP printers with manually loaded trays cannot reliably sense paper
+# size. Without this CUPS can advertise a single, stale media-ready value (for
+# example Legal), causing iOS to hide otherwise supported paper sizes.
+if [ -n "$AIRPRINT_READY_PAPER_SIZES" ]; then
+    cupsctl "ReadyPaperSizes=$AIRPRINT_READY_PAPER_SIZES"
+fi
 
 # ─── 2. Generate Avahi service file for AirPrint ──────────────────────
 echo "📡 Generating Avahi mDNS service file..."
@@ -62,7 +116,8 @@ cat > "$AVAHI_SERVICE_DIR/AirPrint-$PRINTER_NAME.service" <<EOF
     <txt-record>adminurl=http://${CUPS_HOST}:${CUPS_PORT}/printers/$PRINTER_NAME</txt-record>
     <txt-record>pdl=application/octet-stream,application/pdf,image/jpeg,image/png,image/urf</txt-record>
     <txt-record>Color=T</txt-record>
-    <txt-record>Duplex=T</txt-record>
+    <txt-record>Duplex=$AIRPRINT_DUPLEX_TXT</txt-record>
+    <txt-record>PaperMax=$AIRPRINT_PAPER_MAX</txt-record>
     <txt-record>URF=W8,SRGB24,CP1,RS600</txt-record>
     <txt-record>TLS=1.2</txt-record>
   </service>

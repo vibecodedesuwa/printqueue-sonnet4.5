@@ -16,7 +16,8 @@
     <txt-record>adminurl=http://localhost:631/printers/HP_Smart_Tank_515</txt-record>
     <txt-record>pdl=application/octet-stream,application/pdf,image/jpeg,image/png,image/urf</txt-record>
     <txt-record>Color=T</txt-record>
-    <txt-record>Duplex=T</txt-record>
+    <txt-record>Duplex=F</txt-record>
+    <txt-record>PaperMax=legal-A4</txt-record>
     <txt-record>URF=W8,SRGB24,CP1,RS600</txt-record>
     <txt-record>TLS=1.2</txt-record>
   </service>
