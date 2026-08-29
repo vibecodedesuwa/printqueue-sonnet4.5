@@ -14,6 +14,7 @@ printq.echo.story {
 			realm {$CERTSRV_REALM}
 			username {$CERTSRV_USERNAME}
 			keytab_path {$CERTSRV_KEYTAB_PATH:/etc/caddy/certsrv.keytab}
+			krb5_config {$CERTSRV_KRB5_CONFIG:/etc/krb5.conf}
 		}
 	}
 

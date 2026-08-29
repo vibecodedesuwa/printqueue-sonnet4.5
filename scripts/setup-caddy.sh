@@ -89,9 +89,20 @@ if [ ! -r "$CERTSRV_KEYTAB_PATH" ]; then
     exit 1
 fi
 
+CERTSRV_KRB5_CONFIG=${CERTSRV_KRB5_CONFIG:-/etc/krb5.conf}
+if [ ! -r "$CERTSRV_KRB5_CONFIG" ]; then
+    echo "❌ Kerberos configuration is not readable: $CERTSRV_KRB5_CONFIG" >&2
+    exit 1
+fi
+
 if id caddy >/dev/null 2>&1 && ! runuser -u caddy -- test -r "$CERTSRV_KEYTAB_PATH"; then
     echo "❌ The caddy service account cannot read $CERTSRV_KEYTAB_PATH" >&2
     echo "   Run: chown caddy:caddy '$CERTSRV_KEYTAB_PATH' && chmod 0400 '$CERTSRV_KEYTAB_PATH'" >&2
+    exit 1
+fi
+
+if ! runuser -u caddy -- test -r "$CERTSRV_KRB5_CONFIG"; then
+    echo "❌ The caddy service account cannot read $CERTSRV_KRB5_CONFIG" >&2
     exit 1
 fi
 

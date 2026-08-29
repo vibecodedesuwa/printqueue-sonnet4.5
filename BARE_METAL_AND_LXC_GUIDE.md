@@ -910,6 +910,12 @@ use the certificate server's DNS hostname so Kerberos can resolve the correct
 HTTP service principal. The account represented by the keytab must have Enroll
 permission for the AD CS `WebServer` certificate template.
 
+The PrintQ build script applies a small patch to the pinned issuer source before
+building. It prevents an upstream nil-pointer panic when Kerberos configuration
+cannot be loaded, avoids logging the issuer's full configuration, and supports
+`CERTSRV_KRB5_CONFIG` when Caddy needs a dedicated Kerberos configuration file.
+After updating PrintQ, rebuild and reinstall the binary to receive these fixes.
+
 ---
 
 ## 🆘 Quick Reference

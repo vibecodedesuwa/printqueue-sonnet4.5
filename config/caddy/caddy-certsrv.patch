@@ -1,0 +1,104 @@
+diff --git a/caddy.go b/caddy.go
+index 46fc38b..14459e8 100644
+--- a/caddy.go
++++ b/caddy.go
+@@ -18,6 +18,7 @@ import (
+ 	"context"
+ 	"crypto/x509"
+ 	"errors"
++	"fmt"
+ 	"strings"
+ 
+ 	"github.com/caddyserver/certmagic"
+@@ -41,6 +42,7 @@ type CertSrvIssuer struct {
+ 	Username   string `json:"username"`
+ 	Password   string `json:"password,omitempty_empty"`
+ 	KeytabFile string `json:"keytab_path,omitempty_empty"`
++	Krb5Config string `json:"krb5_config,omitempty_empty"`
+ 
+ 	keytab *keytab.Keytab
+ 	cl     *spnego.Client
+@@ -58,31 +60,37 @@ func (CertSrvIssuer) CaddyModule() caddy.ModuleInfo {
+ // Provision sets up the issuer.
+ func (iss *CertSrvIssuer) Provision(ctx caddy.Context) error {
+ 	iss.logger = ctx.Logger()
++	krb5Config := iss.Krb5Config
++	if krb5Config == "" {
++		krb5Config = "/etc/krb5.conf"
++	}
+ 	var cl *spnego.Client
+ 	var err error
+ 	if iss.KeytabFile != "" {
+-		kt, err := keytab.Load(iss.KeytabFile)
+-		if err != nil {
+-			return err
++		kt, loadErr := keytab.Load(iss.KeytabFile)
++		if loadErr != nil {
++			return fmt.Errorf("load AD CS keytab %s: %w", iss.KeytabFile, loadErr)
+ 		}
+ 		iss.keytab = kt
+-		cl, err = MakeClientWithKeytab(iss.CertSrvUrl, iss.Username, iss.keytab, iss.Realm)
++		cl, err = MakeClientWithKeytab(iss.CertSrvUrl, iss.Username, iss.keytab, iss.Realm, krb5Config)
+ 	} else {
+-		cl, err = MakeClientWithPassword(iss.CertSrvUrl, iss.Username, iss.Password, iss.Realm)
++		cl, err = MakeClientWithPassword(iss.CertSrvUrl, iss.Username, iss.Password, iss.Realm, krb5Config)
+ 	}
+ 
+ 	if err != nil {
+-		return err
++		return fmt.Errorf("initialize AD CS Kerberos client using %s: %w", krb5Config, err)
+ 	}
+ 
+ 	iss.cl = cl
+-
+ 	return nil
+ }
+ 
+ // Validate config
+ func (iss *CertSrvIssuer) Validate() error {
+-	iss.logger.Info("My config is\n", zap.Any("config", iss))
++	iss.logger.Info("configured AD CS issuer",
++		zap.String("certsrv_url", iss.CertSrvUrl),
++		zap.String("realm", iss.Realm),
++		zap.Bool("using_keytab", iss.KeytabFile != ""))
+ 	if !strings.Contains(iss.CertSrvUrl, "//") {
+ 		return errors.New("certsrv_url must be a valid URL")
+ 	}
+@@ -140,6 +148,11 @@ func (iss *CertSrvIssuer) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
+ 					return d.ArgErr()
+ 				}
+ 				iss.KeytabFile = d.Val()
++			case "krb5_config":
++				if !d.NextArg() {
++					return d.ArgErr()
++				}
++				iss.Krb5Config = d.Val()
+ 			}
+ 		}
+ 	}
+diff --git a/krb.go b/krb.go
+index 124420e..785d535 100644
+--- a/krb.go
++++ b/krb.go
+@@ -7,8 +7,8 @@ import (
+ 	"gopkg.in/jcmturner/gokrb5.v7/spnego"
+ )
+ 
+-func MakeClientWithPassword(certSrv string, username string, password string, realm string) (*spnego.Client, error) {
+-	cfg, err := config.Load("/etc/krb5.conf")
++func MakeClientWithPassword(certSrv string, username string, password string, realm string, krb5Config string) (*spnego.Client, error) {
++	cfg, err := config.Load(krb5Config)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+@@ -16,8 +16,8 @@ func MakeClientWithPassword(certSrv string, username string, password string, re
+ 	return spnego.NewClient(cl, nil, ""), nil
+ }
+ 
+-func MakeClientWithKeytab(certSrv string, username string, kt *keytab.Keytab, realm string) (*spnego.Client, error) {
+-	cfg, err := config.Load("/etc/krb5.conf")
++func MakeClientWithKeytab(certSrv string, username string, kt *keytab.Keytab, realm string, krb5Config string) (*spnego.Client, error) {
++	cfg, err := config.Load(krb5Config)
+ 	if err != nil {
+ 		return nil, err
+ 	}
