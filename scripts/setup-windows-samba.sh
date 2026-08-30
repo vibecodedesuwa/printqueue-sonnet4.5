@@ -28,7 +28,7 @@ load_samba_settings() {
             \'*\') value=${value#\'}; value=${value%\'} ;;
         esac
         case "$key" in
-            PRINTER_NAME|LDAP_TEST_USER|SAMBA_REALM|SAMBA_WORKGROUP|SAMBA_HOSTNAME|SAMBA_JOIN_USER|SAMBA_SHARE_NAME|SAMBA_WINDOWS_QUEUE|AIRPRINT_DEFAULT_MEDIA)
+            PRINTER_NAME|LDAP_TEST_USER|LDAP_AD_DOMAIN_SID|SAMBA_REALM|SAMBA_WORKGROUP|SAMBA_HOSTNAME|SAMBA_JOIN_USER|SAMBA_SHARE_NAME|SAMBA_WINDOWS_QUEUE|AIRPRINT_DEFAULT_MEDIA)
                 if [ -z "${!key+x}" ]; then
                     printf -v "$key" '%s' "$value"
                     export "$key"
@@ -79,7 +79,7 @@ POLICY
 }
 
 prepare_samba_printer_cache() {
-    local lock_dir domain_users_name domain_users_sid domain_users_gid cache_file
+    local lock_dir domain_sid domain_users_name domain_users_sid domain_users_gid cache_file
 
     [ "$PRINTQ_DISTRO_FAMILY" = "rhel" ] || return 0
     lock_dir=$(smbd -b | awk -F': ' '/^[[:space:]]*LOCKDIR:/ {print $2; exit}')
@@ -106,9 +106,31 @@ prepare_samba_printer_cache() {
         fi
     fi
     if ! [[ "$domain_users_gid" =~ ^[0-9]+$ ]]; then
+        # Domain Users always has the well-known RID 513. This fallback avoids
+        # depending on an English group name (or a working AD name lookup) when
+        # the joined domain SID is already available locally.
+        domain_sid=${LDAP_AD_DOMAIN_SID:-}
+        if ! [[ "$domain_sid" =~ ^S-1-5-21-([0-9]+-){2}[0-9]+$ ]]; then
+            domain_sid=$(
+                net getdomainsid 2>/dev/null |
+                    awk -v domain="$SAMBA_WORKGROUP" '
+                        toupper($0) ~ "^SID FOR DOMAIN " domain " IS:" {print $NF; exit}
+                    '
+            )
+        fi
+        if [[ "$domain_sid" =~ ^S-1-5-21-([0-9]+-){2}[0-9]+$ ]]; then
+            domain_users_sid="${domain_sid}-513"
+            domain_users_gid=$(
+                wbinfo --sid-to-gid "$domain_users_sid" 2>/dev/null |
+                    awk '/^[0-9]+$/ {print; exit}'
+            )
+        fi
+    fi
+    if ! [[ "$domain_users_gid" =~ ^[0-9]+$ ]]; then
         echo "❌ Winbind cannot map '$domain_users_name' to a local GID."
         echo "   The Samba printer cache cannot be prepared safely."
-        echo "   Verify: wbinfo --name-to-sid '$domain_users_name'"
+        echo "   Verify the AD DNS and trust first: wbinfo --check-secret"
+        echo "   Then verify the domain SID: net getdomainsid"
         return 1
     fi
 
@@ -123,6 +145,7 @@ prepare_samba_printer_cache() {
 }
 
 PRINTER_NAME="${PRINTER_NAME:-}"
+LDAP_AD_DOMAIN_SID="${LDAP_AD_DOMAIN_SID:-}"
 SAMBA_REALM="${SAMBA_REALM:-}"
 SAMBA_WORKGROUP="${SAMBA_WORKGROUP:-}"
 SAMBA_HOSTNAME="${SAMBA_HOSTNAME:-}"
@@ -363,6 +386,14 @@ else
 fi
 service_enable_start "$WINBIND_SERVICE"
 install_samba_selinux_workaround
+echo "🔎 Checking the AD trust before preparing Samba's printer cache..."
+if ! wbinfo --check-secret; then
+    echo "❌ Winbind cannot contact the joined AD domain."
+    echo "   Ensure this host resolves _ldap._tcp.dc._msdcs.$SAMBA_REALM via AD DNS."
+    echo "   Do not use AdGuard as the resolver unless it conditionally forwards"
+    echo "   [/$SAMBA_REALM/] to your Active Directory DNS server."
+    exit 1
+fi
 prepare_samba_printer_cache
 service_enable_start "$SMB_SERVICE"
 if systemctl cat samba-bgqd.service >/dev/null 2>&1; then

@@ -82,6 +82,15 @@ class SambaConfigTests(unittest.TestCase):
         self.assertIn('wbinfo --sid-to-gid "$domain_users_sid"', self.setup_script)
         self.assertIn('[[ "$domain_users_gid" =~ ^[0-9]+$ ]]', self.setup_script)
 
+    def test_printer_cache_gid_falls_back_to_well_known_domain_users_sid(self):
+        self.assertIn("LDAP_AD_DOMAIN_SID|SAMBA_REALM", self.setup_script)
+        self.assertIn("net getdomainsid", self.setup_script)
+        self.assertIn('domain_users_sid="${domain_sid}-513"', self.setup_script)
+        self.assertLess(
+            self.setup_script.index("Checking the AD trust before preparing"),
+            self.setup_script.index("prepare_samba_printer_cache\nservice_enable_start"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
