@@ -77,6 +77,11 @@ class SambaConfigTests(unittest.TestCase):
             installer,
         )
 
+    def test_printer_cache_gid_falls_back_to_direct_winbind_sid_mapping(self):
+        self.assertIn('wbinfo --name-to-sid "$domain_users_name"', self.setup_script)
+        self.assertIn('wbinfo --sid-to-gid "$domain_users_sid"', self.setup_script)
+        self.assertIn('[[ "$domain_users_gid" =~ ^[0-9]+$ ]]', self.setup_script)
+
 
 if __name__ == "__main__":
     unittest.main()

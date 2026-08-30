@@ -79,7 +79,7 @@ POLICY
 }
 
 prepare_samba_printer_cache() {
-    local lock_dir domain_users_gid cache_file
+    local lock_dir domain_users_name domain_users_sid domain_users_gid cache_file
 
     [ "$PRINTQ_DISTRO_FAMILY" = "rhel" ] || return 0
     lock_dir=$(smbd -b | awk -F': ' '/^[[:space:]]*LOCKDIR:/ {print $2; exit}')
@@ -88,12 +88,31 @@ prepare_samba_printer_cache() {
         return 1
     fi
 
-    domain_users_gid=$(getent group "${SAMBA_WORKGROUP}\\domain users" | cut -d: -f3)
-    if [ -z "$domain_users_gid" ]; then
-        echo "❌ Winbind cannot resolve '${SAMBA_WORKGROUP}\\domain users'."
+    domain_users_name="${SAMBA_WORKGROUP}\\domain users"
+    domain_users_gid=$(getent group "$domain_users_name" | cut -d: -f3)
+    if ! [[ "$domain_users_gid" =~ ^[0-9]+$ ]]; then
+        # NSS group enumeration/lookups can be disabled even when Winbind's
+        # direct SID mapping is healthy. Resolve the well-known AD group
+        # through wbinfo instead of treating that NSS behavior as a failed join.
+        domain_users_sid=$(
+            wbinfo --name-to-sid "$domain_users_name" 2>/dev/null |
+                awk '/SID_DOM_GROUP|SID_ALIAS/ {print $1; exit}'
+        )
+        if [ -n "$domain_users_sid" ]; then
+            domain_users_gid=$(
+                wbinfo --sid-to-gid "$domain_users_sid" 2>/dev/null |
+                    awk '/^[0-9]+$/ {print; exit}'
+            )
+        fi
+    fi
+    if ! [[ "$domain_users_gid" =~ ^[0-9]+$ ]]; then
+        echo "❌ Winbind cannot map '$domain_users_name' to a local GID."
         echo "   The Samba printer cache cannot be prepared safely."
+        echo "   Verify: wbinfo --name-to-sid '$domain_users_name'"
         return 1
     fi
+
+    echo "✅ Winbind mapped '$domain_users_name' to GID $domain_users_gid"
 
     cache_file="$lock_dir/printer_list.tdb"
     touch "$cache_file"
