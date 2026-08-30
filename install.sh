@@ -422,8 +422,8 @@ if lpstat -p "$PRINTER_NAME" >/dev/null 2>&1; then
     # Policy will be set in Step 7 based on LDAP_ENABLED
     lpadmin -p "$PRINTER_NAME" \
         -o job-hold-until-default=indefinite \
-        -o printer-error-policy=retry-job \
         -o printer-is-shared=true
+    set_printer_retry_policy "$PRINTER_NAME"
     cupsenable "$PRINTER_NAME" 2>/dev/null || true
     cupsaccept "$PRINTER_NAME" 2>/dev/null || true
 

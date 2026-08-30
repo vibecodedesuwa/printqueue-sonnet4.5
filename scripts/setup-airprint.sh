@@ -42,6 +42,19 @@ AIRPRINT_DUPLEX="${AIRPRINT_DUPLEX:-false}"
 AIRPRINT_PAPER_MAX="${AIRPRINT_PAPER_MAX:-legal-A4}"
 AVAHI_SERVICE_DIR="/etc/avahi/services"
 
+set_printer_retry_policy() {
+    local destination="$1" policy
+    for policy in retry-job retry-current-job stop-printer; do
+        if lpadmin -p "$destination" -o "printer-error-policy=$policy" >/dev/null 2>&1; then
+            echo "✅ CUPS error policy for '$destination': $policy"
+            return 0
+        fi
+        echo "ℹ️  CUPS does not support printer-error-policy '$policy' for '$destination'; trying fallback."
+    done
+    echo "⚠️  Could not set a CUPS error policy for '$destination'; continuing with the existing policy."
+    return 0
+}
+
 case "$AIRPRINT_DUPLEX" in
     true) AIRPRINT_DUPLEX_TXT=T ;;
     false) AIRPRINT_DUPLEX_TXT=F ;;
@@ -78,8 +91,8 @@ fi
 lpadmin -p "$PRINTER_NAME" \
     -o printer-is-shared=true \
     -o printer-op-policy=authenticated \
-    -o printer-error-policy=retry-job \
     -o job-hold-until-default=indefinite
+set_printer_retry_policy "$PRINTER_NAME"
 
 # USB/HPLIP printers with manually loaded trays cannot reliably sense paper
 # size. Without this CUPS can advertise a single, stale media-ready value (for

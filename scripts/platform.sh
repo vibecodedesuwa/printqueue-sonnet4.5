@@ -93,3 +93,18 @@ primary_ip() {
     detected_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
     printf '%s\n' "${detected_ip:-127.0.0.1}"
 }
+
+set_printer_retry_policy() {
+    local destination="$1" policy
+    for policy in retry-job retry-current-job stop-printer; do
+        if lpadmin -p "$destination" -o "printer-error-policy=$policy" >/dev/null 2>&1; then
+            echo "✅ CUPS error policy for '$destination': $policy"
+            return 0
+        fi
+        echo "ℹ️  CUPS does not support printer-error-policy '$policy' for '$destination'; trying fallback."
+    done
+
+    echo "⚠️  Could not set a CUPS error policy for '$destination'."
+    echo "   PrintQ will still prevent new held jobs from being released while it reports the printer offline."
+    return 0
+}

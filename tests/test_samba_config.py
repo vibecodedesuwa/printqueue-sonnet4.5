@@ -30,7 +30,7 @@ class SambaConfigTests(unittest.TestCase):
         self.assertIn('lpmove "$SAMBA_WINDOWS_QUEUE" "$PRINTER_NAME"', self.setup_script)
         self.assertIn('lpadmin -x "$SAMBA_WINDOWS_QUEUE"', self.setup_script)
         self.assertNotIn('-v "$DEVICE_URI"', self.setup_script)
-        self.assertGreaterEqual(self.setup_script.count("printer-error-policy=retry-job"), 2)
+        self.assertGreaterEqual(self.setup_script.count('set_printer_retry_policy'), 2)
 
 
 if __name__ == "__main__":
