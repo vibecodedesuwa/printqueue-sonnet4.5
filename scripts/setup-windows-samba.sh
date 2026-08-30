@@ -217,20 +217,23 @@ cat > /etc/samba/smb.conf <<EOF
     printcap name = cups
     printcap cache time = 60
     lpq cache time = 30
-    # Only publish the explicitly configured PrintQ share. rpcd_spoolss still
-    # discovers its mapped CUPS queue when the share is opened.
+    # Only publish the explicitly configured PrintQ share.
     load printers = no
-    rpcd_spoolss:idle_seconds = 300
-    rpcd_spoolss:num_workers = 5
+    # PrintQ deliberately uses a locally installed Windows driver and does not
+    # host Point-and-Print packages. Avoid rpcd_spoolss entirely: Samba 4.23 can
+    # lose the authenticated RPC handle while impersonating the user and then
+    # repeatedly fail to create printer_list.tdb. Windows Local Ports fall back
+    # to the authenticated SMB print path, which is all this share requires.
+    disable spoolss = yes
     map to guest = never
 
-# samba-bgqd and rpcd_spoolss use this special hidden template to maintain
-# Samba's CUPS printer cache. Individual queues are still exposed explicitly.
+# Hidden template used by Samba's client-driver print path. Individual queues
+# are still exposed explicitly.
 [printers]
     comment = PrintQ CUPS printer template
     # Use the distribution-supported temporary spool location. On enforcing
     # SELinux systems, a custom /var/spool/samba directory can make
-    # rpcd_spoolss fail to stat its spool file and return WERR_INVALID_NAME.
+    # Samba fail to stat its spool file and return WERR_INVALID_NAME.
     path = /var/tmp/
     printable = yes
     browseable = no
