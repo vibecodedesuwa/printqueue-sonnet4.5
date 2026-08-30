@@ -25,6 +25,12 @@ class SambaConfigTests(unittest.TestCase):
         self.assertGreaterEqual(self.setup_script.count("path = /var/tmp/"), 2)
         self.assertNotIn("path = /var/spool/samba", self.setup_script)
 
+    def test_windows_destination_serializes_through_source_queue(self):
+        self.assertIn('lpadmin -p "$PRINTER_NAME" -c "$SAMBA_WINDOWS_QUEUE"', self.setup_script)
+        self.assertIn('lpmove "$SAMBA_WINDOWS_QUEUE" "$PRINTER_NAME"', self.setup_script)
+        self.assertIn('lpadmin -x "$SAMBA_WINDOWS_QUEUE"', self.setup_script)
+        self.assertNotIn('-v "$DEVICE_URI"', self.setup_script)
+
 
 if __name__ == "__main__":
     unittest.main()

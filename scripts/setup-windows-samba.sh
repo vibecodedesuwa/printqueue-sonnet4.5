@@ -167,24 +167,22 @@ if [ "$PRINTQ_DISTRO_FAMILY" = "rhel" ]; then
     fi
 fi
 
-echo "🖨️  Creating the dedicated held Windows CUPS queue..."
-DEVICE_LINE=$(lpstat -v "$PRINTER_NAME" | head -n 1)
-DEVICE_URI=${DEVICE_LINE#*: }
-if [ -z "$DEVICE_URI" ] || [ "$DEVICE_URI" = "$DEVICE_LINE" ]; then
-    echo "❌ Could not determine the device URI for '$PRINTER_NAME'."
-    exit 1
+echo "🖨️  Creating the dedicated held Windows CUPS class..."
+# Never create a second queue pointing at the same USB device. CUPS schedules
+# backends per destination, so duplicate HPLIP queues can open the USB device
+# concurrently and fail with HPMUD_R_IO_ERROR (stat=12). A one-member class
+# preserves a distinct held destination while the source queue remains the only
+# owner of the physical backend.
+if lpstat -p "$SAMBA_WINDOWS_QUEUE" >/dev/null 2>&1; then
+    echo "🔄 Migrating the old duplicate Windows queue to a CUPS class..."
+    if lpstat -W not-completed -o "$SAMBA_WINDOWS_QUEUE" 2>/dev/null | grep -q .; then
+        lpmove "$SAMBA_WINDOWS_QUEUE" "$PRINTER_NAME"
+        echo "✅ Pending Windows jobs moved safely to '$PRINTER_NAME'"
+    fi
+    lpadmin -x "$SAMBA_WINDOWS_QUEUE"
 fi
 
-SOURCE_PPD="/etc/cups/ppd/${PRINTER_NAME}.ppd"
-if [ -f "$SOURCE_PPD" ]; then
-    lpadmin -p "$SAMBA_WINDOWS_QUEUE" -E -v "$DEVICE_URI" -P "$SOURCE_PPD"
-elif [[ "$DEVICE_URI" = ipp://* || "$DEVICE_URI" = ipps://* ]]; then
-    lpadmin -p "$SAMBA_WINDOWS_QUEUE" -E -v "$DEVICE_URI" -m everywhere
-else
-    echo "❌ The source queue has no reusable PPD and is not driverless IPP."
-    echo "   Add the Windows queue manually, then rerun this script."
-    exit 1
-fi
+lpadmin -p "$PRINTER_NAME" -c "$SAMBA_WINDOWS_QUEUE"
 lpadmin -p "$SAMBA_WINDOWS_QUEUE" \
     -o job-hold-until-default=indefinite \
     -o printer-is-shared=false \
@@ -328,5 +326,5 @@ echo "✅ Windows Samba/AD printing is ready"
 echo "   Connect domain-joined Windows computers to:"
 printf '   \\\\%s\\%s\n' "$SAMBA_HOSTNAME" "$SAMBA_SHARE_NAME"
 echo ""
-echo "   CUPS queue: $SAMBA_WINDOWS_QUEUE (held, local Samba submissions)"
+echo "   CUPS class: $SAMBA_WINDOWS_QUEUE (held; feeds $PRINTER_NAME)"
 echo "   IPP queue:  $PRINTER_NAME (authenticated AirPrint/Mopria)"
