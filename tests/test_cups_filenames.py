@@ -1,6 +1,7 @@
 import importlib
 import pathlib
 import sys
+import tempfile
 import types
 import unittest
 from unittest.mock import patch
@@ -122,6 +123,73 @@ class CupsFilenameTests(unittest.TestCase):
             side_effect=lambda path: path == "/usr/bin/lpstat",
         ), patch.object(self.module.os, "access", return_value=True):
             self.assertEqual(self.module._system_command("lpstat"), "/usr/bin/lpstat")
+
+    def test_samba_transport_prefix_is_removed_from_real_title(self):
+        self.assertEqual(
+            self.module._usable_job_name("smbprn.00000032 Test Page"),
+            "Test Page",
+        )
+        self.assertIsNone(
+            self.module._usable_job_name(
+                "smbprn.00000036 Remote Downlevel Document"
+            )
+        )
+
+    def test_postscript_title_is_recovered_from_cups_spool(self):
+        with tempfile.TemporaryDirectory() as spool_dir:
+            spool_path = pathlib.Path(spool_dir) / "d00020-001"
+            spool_path.write_bytes(
+                b"%!PS-Adobe-3.0\n%%Title: (Family Schedule)\n%%Pages: 1\n"
+            )
+            with patch.dict(self.module.os.environ, {"CUPS_SPOOL_DIR": spool_dir}):
+                self.assertEqual(
+                    self.module._spool_document_title(20), "Family Schedule"
+                )
+
+    def test_authenticated_windows_owner_is_not_claimable(self):
+        connection = FakeConnection({
+            "job-originating-user-name": "sataporn",
+            "job-name": "Remote Downlevel Document",
+            "printer-uri": (
+                "ipp://localhost/classes/es_non01_st515_01_windows"
+            ),
+            "job-state": 4,
+            "time-at-creation": 1,
+        })
+        with patch.dict(self.module.os.environ, {
+            "PRINTER_NAME": "es_non01_st515_01",
+            "SAMBA_ENABLED": "true",
+            "SAMBA_WINDOWS_QUEUE": "es_non01_st515_01_windows",
+        }), patch.object(
+            self.module, "get_cups_connection", return_value=connection
+        ), patch.object(
+            self.module, "_get_lpstat_jobs", return_value={}
+        ):
+            jobs = self.module.get_all_jobs(db=FakeDatabase())
+        self.assertFalse(jobs[0]["claimable"])
+        self.assertEqual(jobs[0]["name"], "Document #21")
+
+    def test_authenticated_airprint_owner_is_not_claimable(self):
+        with patch.dict(self.module.os.environ, {
+            "LDAP_ENABLED": "true",
+            "SAMBA_ENABLED": "false",
+        }), patch.object(
+            self.module, "_configured_printer_name", return_value="office_printer"
+        ):
+            self.assertFalse(self.module._job_is_claimable(
+                FakeDatabase(), None, "alice", "office_printer", "ipp"
+            ))
+
+    def test_unauthenticated_generic_device_job_remains_claimable(self):
+        with patch.dict(self.module.os.environ, {
+            "LDAP_ENABLED": "false",
+            "SAMBA_ENABLED": "false",
+        }), patch.object(
+            self.module, "_configured_printer_name", return_value="office_printer"
+        ):
+            self.assertTrue(self.module._job_is_claimable(
+                FakeDatabase(), None, "Living Room iPad", "office_printer", "ipp"
+            ))
 
 
 if __name__ == "__main__":

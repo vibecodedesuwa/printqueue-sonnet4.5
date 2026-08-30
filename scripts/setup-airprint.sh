@@ -22,7 +22,7 @@ load_airprint_settings() {
             \'*\') value=${value#\'}; value=${value%\'} ;;
         esac
         case "$key" in
-            PRINTER_NAME|CUPS_HOST|CUPS_PORT|AIRPRINT_READY_PAPER_SIZES|AIRPRINT_DUPLEX|AIRPRINT_PAPER_MAX)
+            PRINTER_NAME|CUPS_HOST|CUPS_PORT|AIRPRINT_READY_PAPER_SIZES|AIRPRINT_DEFAULT_MEDIA|AIRPRINT_DUPLEX|AIRPRINT_PAPER_MAX)
                 if [ -z "${!key+x}" ]; then
                     printf -v "$key" '%s' "$value"
                     export "$key"
@@ -38,6 +38,7 @@ PRINTER_NAME="${PRINTER_NAME:-HP_Smart_Tank_515}"
 CUPS_HOST="${CUPS_HOST:-localhost}"
 CUPS_PORT="${CUPS_PORT:-631}"
 AIRPRINT_READY_PAPER_SIZES="${AIRPRINT_READY_PAPER_SIZES:-A4,A5,A6,B5,Letter,Legal,4x6in,5x7in,EnvelopeDL}"
+AIRPRINT_DEFAULT_MEDIA="${AIRPRINT_DEFAULT_MEDIA:-iso_a4_210x297mm}"
 AIRPRINT_DUPLEX="${AIRPRINT_DUPLEX:-false}"
 AIRPRINT_PAPER_MAX="${AIRPRINT_PAPER_MAX:-legal-A4}"
 AVAHI_SERVICE_DIR="/etc/avahi/services"
@@ -91,7 +92,10 @@ fi
 lpadmin -p "$PRINTER_NAME" \
     -o printer-is-shared=true \
     -o printer-op-policy=authenticated \
-    -o job-hold-until-default=indefinite
+    -o job-hold-until-default=indefinite \
+    -o media-default="$AIRPRINT_DEFAULT_MEDIA" \
+    -o media="$AIRPRINT_DEFAULT_MEDIA" \
+    -o outputorder-default=normal
 set_printer_retry_policy "$PRINTER_NAME"
 
 # USB/HPLIP printers with manually loaded trays cannot reliably sense paper

@@ -37,6 +37,10 @@ class Config:
     LDAP_DOMAIN = os.environ.get('LDAP_DOMAIN', '')
     LDAP_USER_SEARCH_FILTER = os.environ.get('LDAP_USER_SEARCH_FILTER', '(&(objectClass=user)(sAMAccountName={username}))')
 
+    # Authenticated Windows printing through the dedicated Samba CUPS class.
+    SAMBA_ENABLED = os.environ.get('SAMBA_ENABLED', 'false').lower() == 'true'
+    SAMBA_WINDOWS_QUEUE = os.environ.get('SAMBA_WINDOWS_QUEUE', '')
+
 
     # Email Print
     MAIL_ENABLED = os.environ.get('MAIL_ENABLED', 'false').lower() == 'true'

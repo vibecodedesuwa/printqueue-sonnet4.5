@@ -151,11 +151,44 @@ def _usable_job_name(value, job_id=None):
     value = str(value).strip()
     if not value:
         return None
+    # Samba names temporary spool files smbprn.NNNNNNNN. Some clients append
+    # the real document title, so discard the transport prefix but keep that
+    # useful suffix.
+    value = re.sub(r'^smbprn\.\d+\s*', '', value, flags=re.IGNORECASE).strip()
+    if not value:
+        return None
     normalized = value.casefold()
-    generic = {'untitled', 'unknown', 'stdin', '(stdin)', 'print job', 'print_job', 'document'}
+    generic = {
+        'untitled', 'unknown', 'stdin', '(stdin)', 'print job', 'print_job',
+        'document', 'remote downlevel document',
+    }
     if normalized in generic or (job_id is not None and normalized == f'job #{job_id}'.casefold()):
         return None
     return value
+
+
+def _spool_document_title(job_id):
+    """Recover a Windows title embedded in a local PostScript/PJL spool."""
+    spool_root = os.environ.get('CUPS_SPOOL_DIR', '/var/spool/cups')
+    path = os.path.join(spool_root, f'd{int(job_id):05d}-001')
+    try:
+        with open(path, 'rb') as spool_file:
+            header = spool_file.read(256 * 1024).decode('latin-1', errors='ignore')
+    except (OSError, TypeError, ValueError):
+        return None
+
+    patterns = (
+        r'(?im)^%%Title:\s*(?:\((.*?)\)|(.*?))\s*$',
+        r'(?im)^@PJL\s+JOB\s+NAME\s*=\s*"([^"]+)"',
+    )
+    for pattern in patterns:
+        match = re.search(pattern, header)
+        if match:
+            for candidate in match.groups():
+                title = _usable_job_name(candidate, job_id)
+                if title:
+                    return title
+    return None
 
 
 def _cups_job_name(job_info, job_id=None):
@@ -222,6 +255,38 @@ def _get_connection_jobs(conn, which_jobs='not-completed'):
             if key not in jobs.get(job_id, {})
         })
     return jobs, lpstat_jobs
+
+
+def _destination_has_authenticated_owner(printer_name, submitted_via):
+    """Return whether the destination authenticates the reported job owner."""
+    if submitted_via != 'ipp':
+        return False
+    printer_name = str(printer_name or '')
+    source_queue = _configured_printer_name()
+    windows_queue = os.environ.get(
+        'SAMBA_WINDOWS_QUEUE', f'{source_queue}_windows'
+    ).strip() or f'{source_queue}_windows'
+    ldap_enabled = os.environ.get('LDAP_ENABLED', 'false').lower() == 'true'
+    samba_enabled = os.environ.get('SAMBA_ENABLED', 'false').lower() == 'true'
+    return (
+        (ldap_enabled and printer_name == source_queue)
+        or (samba_enabled and printer_name == windows_queue)
+    )
+
+
+def _job_is_claimable(db, meta, cups_owner, printer_name, submitted_via):
+    """Return whether a job belongs in the shared claim pool."""
+    mapped_user = None
+    if db:
+        try:
+            mapped_user = db.get_device_mapping(cups_owner or '')
+        except Exception:
+            pass
+    claimed_user = meta.get('claimed_by') if meta else None
+    submitted_by = meta.get('submitted_by') if meta else None
+    if any((mapped_user, claimed_user, submitted_by)):
+        return False
+    return not _destination_has_authenticated_owner(printer_name, submitted_via)
 
 
 def get_user_jobs(username=None, db=None):
@@ -313,9 +378,18 @@ def get_user_jobs(username=None, db=None):
                 except Exception:
                     pass
 
-            cups_name = _cups_job_name(job_info, job_id)
+            cups_name = _cups_job_name(job_info, job_id) or _spool_document_title(job_id)
             metadata_name = _usable_job_name(meta.get('original_filename'), job_id) if meta else None
             display_name = metadata_name or cups_name or f'Document #{job_id}'
+
+            printer_name = job_info.get('printer-uri', '').split('/')[-1]
+            claimable = _job_is_claimable(
+                db,
+                meta,
+                _usable_job_owner(job_info.get('job-originating-user-name')),
+                printer_name,
+                submitted_via,
+            )
 
             # Preserve a good CUPS-supplied name locally. Later CUPS queries may omit it.
             if db and cups_name and not metadata_name:
@@ -347,12 +421,13 @@ def get_user_jobs(username=None, db=None):
                 'name': display_name,
                 'original_filename': metadata_name or cups_name,
                 'user': display_user,
-                'printer': job_info.get('printer-uri', '').split('/')[-1],
+                'printer': printer_name,
                 'state': job_info.get('job-state', 0),
                 'state_text': get_job_state_text(job_info.get('job-state', 0)),
                 'pages': job_info.get('job-media-sheets-completed', job_info.get('number-of-documents', 0)),
                 'time': time_str,
-                'size': job_info.get('job-k-octets', 0)
+                'size': job_info.get('job-k-octets', 0),
+                'claimable': claimable,
             })
 
         return sorted(job_list, key=lambda x: x['time'], reverse=True)
@@ -524,6 +599,9 @@ def submit_print_job(file_path, title='Untitled', printer_name=None, options=Non
     # Set this explicitly so a direct app submission can override the printer's
     # queue-wide indefinite hold default without changing IPP/AirPrint behavior.
     options['job-hold-until'] = 'indefinite' if hold else 'no-hold'
+    # Keep document order intuitive: page 1, then 2, then 3. Callers can still
+    # explicitly request reverse order when a face-up output tray needs it.
+    options.setdefault('outputorder', 'normal')
 
     try:
         conn = get_cups_connection()
@@ -548,26 +626,32 @@ def get_job_info(job_id, db=None):
         except Exception:
             pass
         meta = db.get_job_meta(job_id) if db else None
-        cups_name = _cups_job_name(job_info, job_id)
+        cups_name = _cups_job_name(job_info, job_id) or _spool_document_title(job_id)
         metadata_name = _usable_job_name(meta.get('original_filename'), job_id) if meta else None
         display_owner = _usable_job_owner(
             job_info.get('job-originating-user-name')
         ) or _usable_job_owner(
             lpstat_jobs.get(job_id, {}).get('job-originating-user-name')
         ) or 'Unknown'
+        printer_name = job_info.get('printer-uri', '').split('/')[-1]
+        submitted_via = meta.get('submitted_via', 'ipp') if meta else 'ipp'
+        claimable = _job_is_claimable(
+            db, meta, display_owner, printer_name, submitted_via
+        )
         return {
             'id': job_id,
             'name': metadata_name or cups_name or f'Document #{job_id}',
             'original_filename': metadata_name or cups_name,
             'user': display_owner,
-            'printer': job_info.get('printer-uri', '').split('/')[-1],
+            'printer': printer_name,
             'state': job_info.get('job-state', 0),
             'state_text': get_job_state_text(job_info.get('job-state', 0)),
             'pages': job_info.get('job-media-sheets-completed', 0),
             'time': datetime.fromtimestamp(
                 job_info.get('time-at-creation', 0)
             ).strftime('%Y-%m-%d %H:%M:%S'),
-            'size': job_info.get('job-k-octets', 0)
+            'size': job_info.get('job-k-octets', 0),
+            'claimable': claimable,
         }
     except Exception as e:
         return None

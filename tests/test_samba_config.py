@@ -10,10 +10,36 @@ class SambaConfigTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
     def test_windows_submissions_are_forced_held(self):
-        forced_option = 'cups options = "job-hold-until=indefinite"'
+        forced_option = (
+            'cups options = "job-hold-until=indefinite outputorder=normal"'
+        )
         self.assertGreaterEqual(self.setup_script.count(forced_option), 2)
         self.assertIn("job-hold-until-default=indefinite", self.setup_script)
         self.assertNotIn('cups options = "raw ', self.setup_script)
+
+    def test_all_destinations_default_to_forward_page_order(self):
+        airprint = (
+            pathlib.Path(__file__).parents[1] / "scripts" / "setup-airprint.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("outputorder-default=normal", airprint)
+        self.assertGreaterEqual(
+            self.setup_script.count("outputorder-default=normal"), 2
+        )
+
+    def test_a4_is_default_without_removing_other_ready_sizes(self):
+        airprint = (
+            pathlib.Path(__file__).parents[1] / "scripts" / "setup-airprint.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'AIRPRINT_DEFAULT_MEDIA="${AIRPRINT_DEFAULT_MEDIA:-iso_a4_210x297mm}"',
+            airprint,
+        )
+        self.assertIn('-o media-default="$AIRPRINT_DEFAULT_MEDIA"', airprint)
+        self.assertIn("Legal", airprint)
+        self.assertGreaterEqual(
+            self.setup_script.count('-o media-default="$AIRPRINT_DEFAULT_MEDIA"'),
+            2,
+        )
 
     def test_only_explicit_queue_is_loaded_and_mapping_is_preserved(self):
         self.assertIn("load printers = no", self.setup_script)

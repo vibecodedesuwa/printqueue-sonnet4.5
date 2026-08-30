@@ -115,6 +115,7 @@ class CupsAuthorizationTests(unittest.TestCase):
         with patch.object(self.module, "get_cups_connection", return_value=connection):
             self.module.submit_print_job("/tmp/example.pdf", "example.pdf", "PrintQ")
         self.assertEqual(connection.printed[0][3]["job-hold-until"], "indefinite")
+        self.assertEqual(connection.printed[0][3]["outputorder"], "normal")
 
     def test_kiosk_can_release_job_discovered_only_through_lpstat(self):
         connection = ClassOnlyConnection(r"ECHOSTORY\alice")

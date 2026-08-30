@@ -47,9 +47,7 @@ def list_jobs():
         jobs = [j for j in jobs if j['state_text'].lower() == state_filter.lower()]
 
     if unclaimed_only:
-        db = current_app.config['db']
-        unclaimed_ids = db.get_unclaimed_jobs()
-        jobs = [j for j in jobs if j['id'] in unclaimed_ids]
+        jobs = [j for j in jobs if j.get('claimable', False)]
 
     # Enrich with metadata
     db = current_app.config['db']
@@ -73,9 +71,8 @@ def list_jobs():
 def list_unclaimed_jobs():
     """List unclaimed jobs from IPP/AirPrint submissions"""
     db = current_app.config['db']
-    unclaimed_ids = db.get_unclaimed_jobs()
     all_jobs = get_all_jobs(db=db)
-    unclaimed = [j for j in all_jobs if j['id'] in unclaimed_ids]
+    unclaimed = [j for j in all_jobs if j.get('claimable', False)]
 
     return jsonify({
         'jobs': unclaimed,
@@ -127,8 +124,13 @@ def api_cancel_job(job_id):
 @api_key_required('write')
 def api_claim_job(job_id):
     """Claim an unclaimed job"""
-    if not get_job_info(job_id, db=current_app.config['db']):
+    job = get_job_info(job_id, db=current_app.config['db'])
+    if not job:
         return jsonify({'error': 'Job not found'}), 404
+    if not job.get('claimable', False):
+        return jsonify({
+            'error': 'This authenticated job already belongs to its submitting user'
+        }), 409
 
     data = request.get_json() or {}
     username = data.get('username')

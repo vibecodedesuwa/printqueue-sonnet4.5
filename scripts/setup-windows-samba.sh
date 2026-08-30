@@ -28,7 +28,7 @@ load_samba_settings() {
             \'*\') value=${value#\'}; value=${value%\'} ;;
         esac
         case "$key" in
-            PRINTER_NAME|LDAP_TEST_USER|SAMBA_REALM|SAMBA_WORKGROUP|SAMBA_HOSTNAME|SAMBA_JOIN_USER|SAMBA_SHARE_NAME|SAMBA_WINDOWS_QUEUE)
+            PRINTER_NAME|LDAP_TEST_USER|SAMBA_REALM|SAMBA_WORKGROUP|SAMBA_HOSTNAME|SAMBA_JOIN_USER|SAMBA_SHARE_NAME|SAMBA_WINDOWS_QUEUE|AIRPRINT_DEFAULT_MEDIA)
                 if [ -z "${!key+x}" ]; then
                     printf -v "$key" '%s' "$value"
                     export "$key"
@@ -110,6 +110,7 @@ SAMBA_HOSTNAME="${SAMBA_HOSTNAME:-}"
 SAMBA_JOIN_USER="${SAMBA_JOIN_USER:-Administrator}"
 SAMBA_SHARE_NAME="${SAMBA_SHARE_NAME:-PrintQ}"
 SAMBA_WINDOWS_QUEUE="${SAMBA_WINDOWS_QUEUE:-${PRINTER_NAME}_windows}"
+AIRPRINT_DEFAULT_MEDIA="${AIRPRINT_DEFAULT_MEDIA:-iso_a4_210x297mm}"
 LDAP_TEST_USER="${LDAP_TEST_USER:-}"
 
 SAMBA_REALM=${SAMBA_REALM,,}
@@ -244,9 +245,16 @@ if lpstat -p "$SAMBA_WINDOWS_QUEUE" >/dev/null 2>&1; then
 fi
 
 lpadmin -p "$PRINTER_NAME" -c "$SAMBA_WINDOWS_QUEUE"
+lpadmin -p "$PRINTER_NAME" \
+    -o media-default="$AIRPRINT_DEFAULT_MEDIA" \
+    -o media="$AIRPRINT_DEFAULT_MEDIA" \
+    -o outputorder-default=normal
 set_printer_retry_policy "$PRINTER_NAME"
 lpadmin -p "$SAMBA_WINDOWS_QUEUE" \
     -o job-hold-until-default=indefinite \
+    -o media-default="$AIRPRINT_DEFAULT_MEDIA" \
+    -o media="$AIRPRINT_DEFAULT_MEDIA" \
+    -o outputorder-default=normal \
     -o printer-is-shared=false \
     -o printer-op-policy=default
 set_printer_retry_policy "$SAMBA_WINDOWS_QUEUE"
@@ -301,7 +309,7 @@ cat > /etc/samba/smb.conf <<EOF
     use client driver = yes
     # Preserve the client's document format so CUPS can detect and convert a
     # generic Type 3 PostScript job through the physical queue's HPLIP filters.
-    cups options = "job-hold-until=indefinite"
+    cups options = "job-hold-until=indefinite outputorder=normal"
 
 [$SAMBA_SHARE_NAME]
     comment = PrintQ AD-authenticated Windows queue
@@ -319,7 +327,7 @@ cat > /etc/samba/smb.conf <<EOF
     # Force every Windows submission to remain visible in CUPS and PrintQ.
     # Some Windows drivers explicitly submit no-hold and otherwise override the
     # queue's job-hold-until-default value.
-    cups options = "job-hold-until=indefinite"
+    cups options = "job-hold-until=indefinite outputorder=normal"
 EOF
 
 if ! testparm -s /etc/samba/smb.conf >/dev/null; then

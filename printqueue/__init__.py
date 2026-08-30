@@ -28,6 +28,11 @@ def create_app(config_class=Config):
     app.config['ADMIN_USERS'] = config_class.ADMIN_USERS
     app.config['PRINTER_NAME'] = config_class.PRINTER_NAME
     app.config['LDAP_DOMAIN'] = config_class.LDAP_DOMAIN
+    app.config['LDAP_ENABLED'] = config_class.LDAP_ENABLED
+    app.config['SAMBA_ENABLED'] = config_class.SAMBA_ENABLED
+    app.config['SAMBA_WINDOWS_QUEUE'] = (
+        config_class.SAMBA_WINDOWS_QUEUE or f'{config_class.PRINTER_NAME}_windows'
+    )
 
     app.config['API_RATE_LIMIT'] = config_class.API_RATE_LIMIT
     app.config['UNCLAIMED_JOB_TIMEOUT_HOURS'] = config_class.UNCLAIMED_JOB_TIMEOUT_HOURS

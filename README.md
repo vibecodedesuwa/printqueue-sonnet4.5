@@ -127,6 +127,7 @@ docker compose up -d --build
 | `SAMBA_SHARE_NAME`        | `PrintQ`              | Windows printer share name                               |
 | `SAMBA_WINDOWS_QUEUE`     | `<printer>_windows`   | Dedicated locally submitted held CUPS queue              |
 | `AIRPRINT_READY_PAPER_SIZES` | common HP sizes   | Sizes reported ready when a USB/HPLIP tray cannot sense media |
+| `AIRPRINT_DEFAULT_MEDIA`  | `iso_a4_210x297mm` | Default AirPrint/Windows media; other ready sizes remain selectable |
 | `AIRPRINT_DUPLEX`         | `false`               | Advertise hardware duplex capability to AirPrint          |
 | `AIRPRINT_PAPER_MAX`      | `legal-A4`            | AirPrint maximum-paper classification                     |
 | `PRINTER_NAME`            | `HP_Smart_Tank_515`   | Target CUPS printer name (must match actual CUPS printer name, e.g. `lpstat -p`) |

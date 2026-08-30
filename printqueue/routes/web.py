@@ -234,8 +234,6 @@ def dashboard():
 
     # Get unclaimed jobs for the claim system
     all_jobs = get_all_jobs(db=db)
-    unclaimed_job_ids = db.get_unclaimed_jobs()
-
     # Build unclaimed jobs list, also check auto-match
     unclaimed_jobs = []
     my_jobs_from_devices = []
@@ -249,15 +247,14 @@ def dashboard():
             my_jobs_from_devices.append(job)
             continue
 
-        # Check if it's unclaimed
-        if job['id'] in unclaimed_job_ids:
-            unclaimed_jobs.append(job)
-        elif not mapped_user and not _same_user(cups_user, username):
+        # Only unauthenticated/generic device jobs enter the claim pool.
+        # Jobs owned by AD-authenticated IPP or Samba users stay private.
+        if job.get('claimable', False):
             # Unknown user, not yet in our tracking — add to meta as unclaimed
             meta = db.get_job_meta(job['id'])
             if not meta:
                 db.create_job_meta(job['id'], submitted_via='ipp')
-                unclaimed_jobs.append(job)
+            unclaimed_jobs.append(job)
 
     # Combine user's own jobs + device-mapped jobs
     combined_jobs = jobs + [j for j in my_jobs_from_devices if j not in jobs]
@@ -312,21 +309,17 @@ def api_unclaimed_jobs():
     db = current_app.config['db']
     username = session['user']['username']
     all_jobs = get_all_jobs(db=db)
-    unclaimed_job_ids = db.get_unclaimed_jobs()
-
     unclaimed_jobs = []
     for job in all_jobs:
         cups_user = job['user']
         mapped_user = db.get_device_mapping(cups_user)
         if _same_user(mapped_user, username) or _same_user(cups_user, username):
             continue
-        if job['id'] in unclaimed_job_ids:
-            unclaimed_jobs.append(job)
-        elif not mapped_user and not _same_user(cups_user, username):
+        if job.get('claimable', False):
             meta = db.get_job_meta(job['id'])
             if not meta:
                 db.create_job_meta(job['id'], submitted_via='ipp')
-                unclaimed_jobs.append(job)
+            unclaimed_jobs.append(job)
     return jsonify(unclaimed_jobs)
 
 
@@ -353,8 +346,14 @@ def api_cancel_job(job_id):
 def api_claim_job(job_id):
     username = session['user']['username']
     db = current_app.config['db']
-    if not get_job_info(job_id, db=current_app.config['db']):
+    job = get_job_info(job_id, db=db)
+    if not job:
         return jsonify({'success': False, 'message': 'Job not found'}), 404
+    if not job.get('claimable', False):
+        return jsonify({
+            'success': False,
+            'message': 'This authenticated job already belongs to its submitting user',
+        }), 409
     success, message = db.claim_job(job_id, username)
     return jsonify({'success': success, 'message': message}), 200 if success else 409
 
