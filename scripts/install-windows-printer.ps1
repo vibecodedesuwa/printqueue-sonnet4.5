@@ -40,8 +40,22 @@ if ($existingPrinter) {
 }
 
 if (-not (Get-PrinterPort -Name $portName -ErrorAction SilentlyContinue)) {
-    Add-PrinterPort -Name $portName
-    Write-Host "Created authenticated SMB port $portName"
+    try {
+        Add-PrinterPort -Name $portName
+        Write-Host "Created authenticated SMB port $portName"
+    }
+    catch {
+        # The Local Port monitor can retain a UNC port that Get-PrinterPort does
+        # not enumerate. Treat ERROR_ALREADY_EXISTS as success; Add-Printer can
+        # still bind to that valid port name.
+        if ($_.Exception.HResult -eq -2147024713 -or
+            $_.FullyQualifiedErrorId -match '0x800700b7|ResourceExists') {
+            Write-Host "Authenticated SMB port $portName already exists."
+        }
+        else {
+            throw
+        }
+    }
 }
 
 Add-Printer -Name $PrinterName -DriverName $DriverName -PortName $portName
