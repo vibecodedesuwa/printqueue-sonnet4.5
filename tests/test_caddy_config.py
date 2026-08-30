@@ -26,6 +26,7 @@ class CaddyConfigTests(unittest.TestCase):
         self.assertIn("issuer certsrv", self.config)
         self.assertIn("keytab_path {$CERTSRV_KEYTAB_PATH:", self.config)
         self.assertIn("krb5_config {$CERTSRV_KRB5_CONFIG:", self.config)
+        self.assertIn("template {$CERTSRV_TEMPLATE:WebServer}", self.config)
         self.assertNotIn("password {$CERTSRV_", self.config)
 
     def test_printq_and_cups_upstreams_are_separate(self):
@@ -41,9 +42,18 @@ class CaddyConfigTests(unittest.TestCase):
         self.assertIn('useradd --system --gid caddy', self.setup_script)
 
     def test_build_patches_the_upstream_nil_client_failure(self):
+        added_plugin_lines = "\n".join(
+            line[1:]
+            for line in self.plugin_patch.splitlines()
+            if line.startswith("+") and not line.startswith("+++")
+        )
         self.assertIn("git -C \"$PATCHED_PLUGIN_DIR\" apply", self.build_script)
         self.assertIn("initialize AD CS Kerberos client", self.plugin_patch)
         self.assertIn('case "krb5_config":', self.plugin_patch)
+        self.assertIn('case "template":', self.plugin_patch)
+        self.assertIn('"CertificateTemplate:" + template', self.plugin_patch)
+        self.assertNotIn("WebServer(PrivateKeyExportable)", added_plugin_lines)
+        self.assertIn("response text:", self.plugin_patch)
         self.assertNotIn('log.Printf("certSrv:', self.plugin_patch)
 
     def test_setup_preserves_host_kerberos_config_on_el10(self):

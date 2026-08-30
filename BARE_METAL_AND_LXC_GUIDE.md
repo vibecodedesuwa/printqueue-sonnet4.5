@@ -922,6 +922,12 @@ host-wide `/etc/krb5.conf` remain unchanged. Set `CERTSRV_KDCS` in
 names or addresses so the older Kerberos client does not depend on DNS SRV
 discovery.
 
+`CERTSRV_TEMPLATE` defaults to the AD CS internal template name `WebServer`.
+That template must be published by the CA and grant the dedicated Caddy account
+Read and Enroll. The patched issuer reports a bounded text summary from AD CS
+when a request is denied or left pending instead of returning only “No valid
+link found.”
+
 ---
 
 ## 🆘 Quick Reference

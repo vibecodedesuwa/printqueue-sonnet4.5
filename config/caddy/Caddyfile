@@ -15,6 +15,7 @@ printq.echo.story {
 			username {$CERTSRV_USERNAME}
 			keytab_path {$CERTSRV_KEYTAB_PATH:/etc/caddy/certsrv.keytab}
 			krb5_config {$CERTSRV_KRB5_CONFIG:/etc/krb5.conf}
+			template {$CERTSRV_TEMPLATE:WebServer}
 		}
 	}
 

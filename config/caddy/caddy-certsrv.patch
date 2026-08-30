@@ -1,5 +1,5 @@
 diff --git a/caddy.go b/caddy.go
-index 46fc38b..14459e8 100644
+index 46fc38b..0581a15 100644
 --- a/caddy.go
 +++ b/caddy.go
 @@ -18,6 +18,7 @@ import (
@@ -10,21 +10,25 @@ index 46fc38b..14459e8 100644
  	"strings"
  
  	"github.com/caddyserver/certmagic"
-@@ -41,6 +42,7 @@ type CertSrvIssuer struct {
+@@ -41,6 +42,8 @@ type CertSrvIssuer struct {
  	Username   string `json:"username"`
  	Password   string `json:"password,omitempty_empty"`
  	KeytabFile string `json:"keytab_path,omitempty_empty"`
 +	Krb5Config string `json:"krb5_config,omitempty_empty"`
++	Template   string `json:"template,omitempty_empty"`
  
  	keytab *keytab.Keytab
  	cl     *spnego.Client
-@@ -58,31 +60,37 @@ func (CertSrvIssuer) CaddyModule() caddy.ModuleInfo {
+@@ -58,31 +61,40 @@ func (CertSrvIssuer) CaddyModule() caddy.ModuleInfo {
  // Provision sets up the issuer.
  func (iss *CertSrvIssuer) Provision(ctx caddy.Context) error {
  	iss.logger = ctx.Logger()
 +	krb5Config := iss.Krb5Config
 +	if krb5Config == "" {
 +		krb5Config = "/etc/krb5.conf"
++	}
++	if iss.Template == "" {
++		iss.Template = "WebServer"
 +	}
  	var cl *spnego.Client
  	var err error
@@ -64,7 +68,16 @@ index 46fc38b..14459e8 100644
  	if !strings.Contains(iss.CertSrvUrl, "//") {
  		return errors.New("certsrv_url must be a valid URL")
  	}
-@@ -140,6 +148,11 @@ func (iss *CertSrvIssuer) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
+@@ -101,7 +113,7 @@ func (iss CertSrvIssuer) IssuerKey() string {
+ // Issue issues a certificate to satisfy the CSR.
+ func (iss CertSrvIssuer) Issue(ctx context.Context, csr *x509.CertificateRequest) (*certmagic.IssuedCertificate, error) {
+ 	iss.logger.Info("Getting asked to pass a CSR for %s\n", zap.Stringer("Subject", csr.Subject))
+-	cert, err := MakeCert(iss.cl, iss.CertSrvUrl, csr, ctx)
++	cert, err := MakeCert(iss.cl, iss.CertSrvUrl, iss.Template, csr, ctx)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+@@ -140,6 +152,16 @@ func (iss *CertSrvIssuer) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
  					return d.ArgErr()
  				}
  				iss.KeytabFile = d.Val()
@@ -73,9 +86,45 @@ index 46fc38b..14459e8 100644
 +					return d.ArgErr()
 +				}
 +				iss.Krb5Config = d.Val()
++			case "template":
++				if !d.NextArg() {
++					return d.ArgErr()
++				}
++				iss.Template = d.Val()
  			}
  		}
  	}
+diff --git a/certsrv.go b/certsrv.go
+index d1d955f..4e75011 100644
+--- a/certsrv.go
++++ b/certsrv.go
+@@ -31,7 +31,7 @@ func fetchCert(cl *spnego.Client, certSrvUrl string, certUrl string, ctx context
+ }
+ 
+ // Returns a PEM-encoded ceritifcate
+-func MakeCert(cl *spnego.Client, certSrvUrl string, csr *x509.CertificateRequest, ctx context.Context) (string, error) {
++func MakeCert(cl *spnego.Client, certSrvUrl string, template string, csr *x509.CertificateRequest, ctx context.Context) (string, error) {
+ 	req := pem.EncodeToMemory(&pem.Block{
+ 		Type: "CERTIFICATE REQUEST", Bytes: csr.Raw,
+ 	})
+@@ -39,7 +39,7 @@ func MakeCert(cl *spnego.Client, certSrvUrl string, csr *x509.CertificateRequest
+ 	data := url.Values{
+ 		"Mode":        {"newreq"},
+ 		"CertRequest": {string(req)},
+-		"CertAttrib":  {"CertificateTemplate:WebServer(PrivateKeyExportable)"},
++		"CertAttrib":  {"CertificateTemplate:" + template},
+ 	}
+ 
+ 	// spnego.Client does not support cancellation
+@@ -58,7 +58,7 @@ func MakeCert(cl *spnego.Client, certSrvUrl string, csr *x509.CertificateRequest
+ 	defer resp.Body.Close()
+ 	link, err := parseHTMLResponse(resp.Body)
+ 	if err != nil {
+-		return "", err
++		return "", fmt.Errorf("AD CS returned %s without an issued certificate: %w", resp.Status, err)
+ 	}
+ 	return fetchCert(cl, certSrvUrl, link, ctx)
+ }
 diff --git a/krb.go b/krb.go
 index 124420e..785d535 100644
 --- a/krb.go
@@ -102,3 +151,56 @@ index 124420e..785d535 100644
  	if err != nil {
  		return nil, err
  	}
+diff --git a/parse.go b/parse.go
+index 1f27ea1..0a0f1c7 100644
+--- a/parse.go
++++ b/parse.go
+@@ -1,7 +1,8 @@
+ package certsrv
+ 
+ import (
+-	"errors"
++	"bytes"
++	"fmt"
+ 	"io"
+ 	"strings"
+ 
+@@ -9,12 +10,23 @@ import (
+ )
+ 
+ func parseHTMLResponse(response io.Reader) (string, error) {
+-	tokenizer := html.NewTokenizer(response)
++	body, err := io.ReadAll(io.LimitReader(response, 2<<20))
++	if err != nil {
++		return "", fmt.Errorf("read AD CS response: %w", err)
++	}
++	tokenizer := html.NewTokenizer(bytes.NewReader(body))
++	var responseText []string
+ 	for {
+ 		tt := tokenizer.Next()
+ 		if tt == html.ErrorToken {
+ 			break
+ 		}
++		if tt == html.TextToken && len(responseText) < 40 {
++			text := strings.Join(strings.Fields(string(tokenizer.Text())), " ")
++			if text != "" && !strings.ContainsAny(text, "{}") {
++				responseText = append(responseText, text)
++			}
++		}
+ 		tag, hasAttr := tokenizer.TagName()
+ 		if !hasAttr {
+ 			continue
+@@ -39,5 +51,12 @@ func parseHTMLResponse(response io.Reader) (string, error) {
+ 			}
+ 		}
+ 	}
+-	return "", errors.New("No valid link found")
++	summary := strings.Join(responseText, " ")
++	if len(summary) > 800 {
++		summary = summary[:800] + "..."
++	}
++	if summary == "" {
++		summary = "empty or unrecognized HTML response"
++	}
++	return "", fmt.Errorf("no valid certificate link found; response text: %s", summary)
+ }
