@@ -138,9 +138,9 @@
             {% if device %}
             <span class="badge bg-secondary bg-opacity-25 text-body-secondary d-none d-md-inline"><i class="bi bi-laptop me-1"></i>{{ device.name }}</span>
             {% endif %}
-            <span class="badge {{ 'text-bg-success' if printer.state in [3, 4] else 'text-bg-danger' }}" id="printerBadge">
-                <span class="pulse-dot {{ 'online' if printer.state in [3, 4] else 'offline' }} me-1"></span>
-                {{ printer.state_text|default('Unknown') }}
+            <span class="badge {{ 'text-bg-success' if printer.safe_to_release else 'text-bg-danger' }}" id="printerBadge">
+                <span class="pulse-dot {{ 'online' if printer.safe_to_release else 'offline' }} me-1"></span>
+                {{ printer.display_message|default(printer.state_text)|default('Unknown') }}
             </span>
         </div>
     </div>
@@ -249,10 +249,11 @@
             // Update printer badge
             if (data.printer) {
                 const b = document.getElementById('printerBadge');
-                const isOnline = [3, 4].includes(data.printer.state);
+                const isOnline = Boolean(data.printer.safe_to_release);
                 b.className = `badge ${isOnline ? 'text-bg-success' : 'text-bg-danger'}`;
                 b.querySelector('.pulse-dot').className = `pulse-dot ${isOnline ? 'online' : 'offline'} me-1`;
-                b.lastChild.textContent = ' ' + (data.printer.state_text || 'Unknown');
+                b.lastChild.textContent = ' ' + t(data.printer.status_code, data.printer.display_message || data.printer.state_text || 'Unknown');
+                b.title = [data.printer.state_message, ...(data.printer.state_reasons || [])].filter(Boolean).join(' · ');
             }
 
             prevJobIds = newIds;

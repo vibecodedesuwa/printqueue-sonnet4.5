@@ -75,6 +75,62 @@ def get_printer_state_text(state):
     return states.get(state, 'Unknown')
 
 
+def _as_reason_list(value):
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(',') if item.strip() and item.strip() != 'none']
+    return [str(item).strip() for item in value if str(item).strip() and str(item).strip() != 'none']
+
+
+def _printer_status_payload(printer_name, printer):
+    """Translate raw CUPS attributes into an actionable connectivity state."""
+    state = printer.get('printer-state', 0)
+    message = str(printer.get('printer-state-message', '') or '').strip()
+    reasons = _as_reason_list(printer.get('printer-state-reasons'))
+    device_uri = str(printer.get('device-uri', '') or '')
+    is_usb = device_uri.startswith(('hp:/usb/', 'usb:'))
+    searchable = f"{message} {' '.join(reasons)}".casefold()
+    disconnect_markers = (
+        'unable to open device', 'device unavailable', 'device not found',
+        'not connected', 'offline-report', 'backend-failed', 'no such device',
+    )
+    disconnected = any(marker in searchable for marker in disconnect_markers)
+    unavailable = disconnected or state == 5
+
+    if disconnected and is_usb:
+        status_code = 'usb_disconnected'
+        display_message = 'USB printer disconnected — jobs will remain held'
+    elif disconnected:
+        status_code = 'printer_disconnected'
+        display_message = 'Printer connection lost — jobs will remain held'
+    elif state == 5:
+        status_code = 'printer_stopped'
+        display_message = message or 'Printer stopped — jobs will remain held'
+    elif state == 4:
+        status_code = 'printer_busy'
+        display_message = message or 'Printing in progress'
+    else:
+        status_code = 'printer_ready'
+        display_message = message or 'Printer ready and accepting jobs'
+
+    return {
+        'name': printer_name,
+        'state': state,
+        'state_text': get_printer_state_text(state),
+        'state_message': message,
+        'state_reasons': reasons,
+        'device_uri': device_uri,
+        'transport': 'usb' if is_usb else 'other',
+        'accepting': printer.get('printer-is-accepting-jobs', False),
+        'connected': not disconnected,
+        'safe_to_release': not unavailable,
+        'status_code': status_code,
+        'display_message': display_message,
+        'jobs_safe': True,
+    }
+
+
 def _usable_job_name(value, job_id=None):
     """Return a meaningful document name, rejecting common CUPS placeholders."""
     if value is None:
@@ -285,6 +341,11 @@ def release_job(job_id, username=None, is_admin=False):
             if not is_authorized:
                 return False, 'Permission denied', 403
 
+        printer_status = get_printer_status()
+        if not printer_status.get('safe_to_release', False):
+            message = printer_status.get('display_message', 'Printer unavailable')
+            return False, f'{message}. Job remains held.', 409
+
         conn.setJobHoldUntil(job_id, 'no-hold')
         return True, 'Job released', 200
     except Exception as e:
@@ -335,14 +396,12 @@ def get_printer_status(printer_name=None):
         printers = conn.getPrinters()
 
         if printer_name in printers:
-            printer = printers[printer_name]
-            return {
-                'name': printer_name,
-                'state': printer.get('printer-state', 0),
-                'state_text': get_printer_state_text(printer.get('printer-state', 0)),
-                'state_message': printer.get('printer-state-message', ''),
-                'accepting': printer.get('printer-is-accepting-jobs', False)
-            }
+            printer = dict(printers[printer_name])
+            try:
+                printer.update(conn.getPrinterAttributes(printer_name))
+            except Exception:
+                pass
+            return _printer_status_payload(printer_name, printer)
         return {'error': f'Printer {printer_name} not found'}
     except Exception as e:
         return {'error': str(e)}

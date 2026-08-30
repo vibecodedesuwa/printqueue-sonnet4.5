@@ -6,7 +6,7 @@ from flask import Blueprint, render_template, request, jsonify, redirect, url_fo
 import os
 
 from ..auth import login_required, is_admin
-from ..cups_utils import submit_print_job
+from ..cups_utils import get_printer_status, submit_print_job
 from ..filenames import clean_display_filename, unique_storage_filename
 
 upload_bp = Blueprint('upload', __name__)
@@ -74,7 +74,10 @@ def upload_file():
     username = session.get('user', {}).get('username')
     submission_source = request.form.get('submission_source', '')
     is_qr_submission = submission_source in {'qr_file_upload', 'qr_a4_editor'}
-    auto_print = is_qr_submission and current_app.config.get('AUTO_PRINT_QR_UPLOADS', True)
+    auto_print_requested = is_qr_submission and current_app.config.get('AUTO_PRINT_QR_UPLOADS', True)
+    printer_status = get_printer_status(printer_name)
+    auto_print = auto_print_requested and printer_status.get('safe_to_release', False)
+    held_for_printer = auto_print_requested and not auto_print
     success, result = submit_print_job(
         converted_path,
         original_filename,
@@ -96,6 +99,7 @@ def upload_file():
         if username:
             message = (
                 f'✅ Job #{result} sent directly to the printer.' if auto_print
+                else f'⚠️ Job #{result} is held safely until the printer reconnects.' if held_for_printer
                 else f'✅ Job #{result} submitted! It will print once approved.'
             )
             flash(message, 'success')
@@ -103,6 +107,7 @@ def upload_file():
         else:
             message = (
                 f'✅ Guest job #{result} sent directly to the printer.' if auto_print
+                else f'⚠️ Guest job #{result} is held safely until the printer reconnects.' if held_for_printer
                 else f'✅ Job #{result} submitted to unclaimed pool! Please claim it on the dashboard or kiosk.'
             )
             flash(message, 'success')

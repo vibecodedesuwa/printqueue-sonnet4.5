@@ -52,13 +52,20 @@ class CupsAuthorizationTests(unittest.TestCase):
         sys.modules["cups"] = fake_cups
         cls.module = importlib.import_module("printqueue.cups_utils")
 
-    def call_release(self, owner, requesting_user):
+    def call_release(self, owner, requesting_user, printer_ready=True):
         connection = FakeConnection(owner)
         fake_flask = types.ModuleType("flask")
         fake_flask.current_app = types.SimpleNamespace(config={"db": FakeDatabase()})
         with patch.dict(sys.modules, {"flask": fake_flask}), patch.object(
             self.module, "get_cups_connection", return_value=connection
-        ), patch.object(self.module, "LDAP_DOMAIN", "acme.local"):
+        ), patch.object(self.module, "LDAP_DOMAIN", "acme.local"), patch.object(
+            self.module,
+            "get_printer_status",
+            return_value={
+                "safe_to_release": printer_ready,
+                "display_message": "USB printer disconnected",
+            },
+        ):
             result = self.module.release_job(12, requesting_user, is_admin=False)
         return result, connection
 
@@ -71,6 +78,23 @@ class CupsAuthorizationTests(unittest.TestCase):
         result, connection = self.call_release(r"ACME\Alice", "alice")
         self.assertEqual(result, (True, "Job released", 200))
         self.assertEqual(connection.released, [(12, "no-hold")])
+
+    def test_disconnected_printer_keeps_authorized_job_held(self):
+        result, connection = self.call_release(r"ACME\Alice", "alice", printer_ready=False)
+        self.assertEqual(result, (False, "USB printer disconnected. Job remains held.", 409))
+        self.assertEqual(connection.released, [])
+
+    def test_usb_backend_failure_is_reported_clearly(self):
+        payload = self.module._printer_status_payload("printer", {
+            "printer-state": 5,
+            "printer-state-message": "Unable to open device, will retry in 30 seconds",
+            "printer-state-reasons": ["connecting-to-device"],
+            "device-uri": "hp:/usb/Smart_Tank_510_series?serial=example",
+            "printer-is-accepting-jobs": True,
+        })
+        self.assertEqual(payload["status_code"], "usb_disconnected")
+        self.assertFalse(payload["safe_to_release"])
+        self.assertTrue(payload["jobs_safe"])
 
     def test_direct_upload_explicitly_overrides_queue_hold(self):
         connection = FakeConnection("guest")

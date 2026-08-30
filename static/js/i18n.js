@@ -49,9 +49,12 @@ const translations = {
         claim_job: "Claim Job",
         claim_desc: "Jobs submitted via AirPrint / Mopria or generic devices can be claimed here.",
         printer_status_title: "Printer Status",
-        printer_ready: "Printer Ready & Accepting Jobs",
         printer_offline: "Printer Offline or Stopped",
         printer_busy: "Printing in progress",
+        printer_ready: "Printer ready and accepting jobs",
+        usb_disconnected: "USB printer disconnected — jobs will remain held",
+        printer_disconnected: "Printer connection lost — jobs will remain held",
+        printer_stopped: "Printer stopped — jobs will remain held",
 
         // Upload & Print
         upload_title: "Upload & Print Document",
@@ -171,9 +174,12 @@ const translations = {
         claim_job: "อ้างสิทธิ์งานพิมพ์",
         claim_desc: "งานพิมพ์ผ่าน AirPrint / Mopria หรืออุปกรณ์พกพาสามารถกดอ้างสิทธิ์ได้ที่นี่",
         printer_status_title: "สถานะเครื่องพิมพ์",
-        printer_ready: "เครื่องพิมพ์พร้อมใช้งาน",
         printer_offline: "เครื่องพิมพ์ออฟไลน์ หรือหยุดทำงาน",
         printer_busy: "กำลังดำเนินการพิมพ์",
+        printer_ready: "เครื่องพิมพ์พร้อมรับงาน",
+        usb_disconnected: "การเชื่อมต่อเครื่องพิมพ์ USB หลุด — งานจะถูกพักไว้อย่างปลอดภัย",
+        printer_disconnected: "การเชื่อมต่อเครื่องพิมพ์ขาดหาย — งานจะถูกพักไว้อย่างปลอดภัย",
+        printer_stopped: "เครื่องพิมพ์หยุดทำงาน — งานจะถูกพักไว้อย่างปลอดภัย",
 
         // Upload & Print
         upload_title: "อัปโหลดและสั่งพิมพ์เอกสาร",

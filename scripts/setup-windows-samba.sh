@@ -183,8 +183,10 @@ if lpstat -p "$SAMBA_WINDOWS_QUEUE" >/dev/null 2>&1; then
 fi
 
 lpadmin -p "$PRINTER_NAME" -c "$SAMBA_WINDOWS_QUEUE"
+lpadmin -p "$PRINTER_NAME" -o printer-error-policy=retry-job
 lpadmin -p "$SAMBA_WINDOWS_QUEUE" \
     -o job-hold-until-default=indefinite \
+    -o printer-error-policy=retry-job \
     -o printer-is-shared=false \
     -o printer-op-policy=default
 cupsenable "$SAMBA_WINDOWS_QUEUE"

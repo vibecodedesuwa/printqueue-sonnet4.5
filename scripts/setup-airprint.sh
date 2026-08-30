@@ -78,6 +78,7 @@ fi
 lpadmin -p "$PRINTER_NAME" \
     -o printer-is-shared=true \
     -o printer-op-policy=authenticated \
+    -o printer-error-policy=retry-job \
     -o job-hold-until-default=indefinite
 
 # USB/HPLIP printers with manually loaded trays cannot reliably sense paper

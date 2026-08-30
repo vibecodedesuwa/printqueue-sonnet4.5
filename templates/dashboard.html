@@ -197,8 +197,10 @@
                     dot.className = 'status-dot offline';
                     text.textContent = '⚠️ ' + data.error;
                 } else {
-                    dot.className = data.state === 3 ? 'status-dot online' : 'status-dot offline';
-                    text.textContent = data.name + ' — ' + data.state_text;
+                    dot.className = data.safe_to_release ? 'status-dot online' : 'status-dot offline';
+                    const translated = t(data.status_code, data.display_message || data.state_text);
+                    text.textContent = data.name + ' — ' + translated;
+                    text.title = [data.state_message, ...(data.state_reasons || [])].filter(Boolean).join(' · ');
                 }
             setConnectionState(true);
         } catch (error) {
