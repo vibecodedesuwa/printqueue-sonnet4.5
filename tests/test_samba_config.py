@@ -41,6 +41,16 @@ class SambaConfigTests(unittest.TestCase):
         )
         self.assertNotIn("JobPrivateValues none", cupsd)
 
+    def test_service_path_includes_cups_system_utilities(self):
+        installer = (
+            pathlib.Path(__file__).parents[1] / "install.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'Environment="PATH=/opt/print-queue-manager/venv/bin:'
+            '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"',
+            installer,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

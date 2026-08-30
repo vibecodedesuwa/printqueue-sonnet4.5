@@ -115,6 +115,14 @@ class CupsFilenameTests(unittest.TestCase):
         self.assertEqual(jobs[0]["printer"], "es_non01_st515_01_windows")
         self.assertEqual(jobs[0]["user"], r"ECHOSTORY\alice")
 
+    def test_lpstat_is_found_when_service_path_only_contains_venv(self):
+        with patch.object(self.module.shutil, "which", return_value=None), patch.object(
+            self.module.os.path,
+            "isfile",
+            side_effect=lambda path: path == "/usr/bin/lpstat",
+        ), patch.object(self.module.os, "access", return_value=True):
+            self.assertEqual(self.module._system_command("lpstat"), "/usr/bin/lpstat")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -503,7 +503,7 @@ Requires=cups.service
 Type=simple
 User=root
 WorkingDirectory=/opt/print-queue-manager
-Environment="PATH=/opt/print-queue-manager/venv/bin"
+Environment="PATH=/opt/print-queue-manager/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 EnvironmentFile=/opt/print-queue-manager/.env
 ExecStart=/opt/print-queue-manager/venv/bin/gunicorn --bind 0.0.0.0:5000 --workers 2 --timeout 120 app:app
 Restart=always

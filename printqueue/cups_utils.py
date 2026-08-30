@@ -6,6 +6,7 @@ import logging
 import os
 import subprocess
 import re
+import shutil
 from datetime import datetime
 
 from .identity import usernames_match
@@ -14,6 +15,18 @@ from .identity import usernames_match
 PRINTER_NAME = os.environ.get('PRINTER_NAME', 'HP_Smart_Tank_515')
 LDAP_DOMAIN = os.environ.get('LDAP_DOMAIN', '')
 logger = logging.getLogger(__name__)
+
+
+def _system_command(name):
+    """Resolve a system utility even when systemd supplies a venv-only PATH."""
+    resolved = shutil.which(name)
+    if resolved:
+        return resolved
+    for directory in ('/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'):
+        candidate = f'{directory}/{name}'
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return name
 
 
 def get_cups_connection():
@@ -188,7 +201,7 @@ def _get_lpstat_jobs(which_jobs='not-completed'):
     """Read jobs from the scheduler CLI, including CUPS class destinations."""
     try:
         result = subprocess.run(
-            ['lpstat', '-W', which_jobs, '-o', '-l'],
+            [_system_command('lpstat'), '-W', which_jobs, '-o', '-l'],
             capture_output=True,
             text=True,
             timeout=5,
@@ -246,9 +259,9 @@ def get_user_jobs(username=None, db=None):
                 try:
                     # Try multiple commands to find job info
                     for cmd in [
-                        ['lpstat', '-o', '-l'],
-                        ['lpstat', '-W', 'all', '-l'],
-                        ['lpq', '-l', '-P', _configured_printer_name()],
+                        [_system_command('lpstat'), '-o', '-l'],
+                        [_system_command('lpstat'), '-W', 'all', '-l'],
+                        [_system_command('lpq'), '-l', '-P', _configured_printer_name()],
                     ]:
                         result = subprocess.run(
                             cmd, capture_output=True, text=True, timeout=5
