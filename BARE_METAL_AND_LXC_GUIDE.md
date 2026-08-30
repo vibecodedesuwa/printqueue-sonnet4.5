@@ -430,6 +430,11 @@ generated configuration includes a hidden `[printers]` template for
 printer and queue queries. Re-run `setup-windows-samba.sh` after updating to
 apply these settings to an existing server.
 
+The generated Samba share passes `job-hold-until=indefinite` on every Windows
+submission in addition to setting the same CUPS queue default. This prevents a
+Windows driver from bypassing PrintQ's release queue with an explicit no-hold
+option.
+
 ---
 
 ## B.5 — Install PrintQ Web App

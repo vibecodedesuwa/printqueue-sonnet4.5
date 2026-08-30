@@ -237,7 +237,7 @@ cat > /etc/samba/smb.conf <<EOF
     read only = yes
     create mask = 0600
     use client driver = yes
-    cups options = raw
+    cups options = "raw job-hold-until=indefinite"
 
 [$SAMBA_SHARE_NAME]
     comment = PrintQ AD-authenticated Windows queue
@@ -250,7 +250,10 @@ cat > /etc/samba/smb.conf <<EOF
     create mask = 0600
     use client driver = yes
     force printername = yes
-    cups options = raw
+    # Force every Windows submission to remain visible in CUPS and PrintQ.
+    # Some Windows drivers explicitly submit no-hold and otherwise override the
+    # queue's job-hold-until-default value.
+    cups options = "raw job-hold-until=indefinite"
 EOF
 
 if ! testparm -s /etc/samba/smb.conf >/dev/null; then
