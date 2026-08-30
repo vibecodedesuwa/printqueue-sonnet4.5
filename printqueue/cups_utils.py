@@ -154,13 +154,73 @@ def _cups_job_name(job_info, job_id=None):
     return None
 
 
+def _usable_job_owner(value):
+    """Return a real CUPS owner, rejecting privacy/redaction placeholders."""
+    if value is None:
+        return None
+    owner = str(value).strip()
+    if not owner or owner.casefold() in {
+        'withheld', 'unknown', 'anonymous', 'none', 'not supplied',
+    }:
+        return None
+    return owner
+
+
+def _parse_lpstat_jobs(output):
+    """Parse destination/job/owner rows emitted by ``lpstat -o``."""
+    jobs = {}
+    for line in (output or '').splitlines():
+        if not line or line[0].isspace():
+            continue
+        match = re.match(r'^(\S+)-(\d+)\s+(\S+)\s+(\d+)(?:\s+.*)?$', line)
+        if not match:
+            continue
+        destination, job_id, owner, size = match.groups()
+        jobs[int(job_id)] = {
+            'job-originating-user-name': owner,
+            'printer-uri': f'ipp://localhost/printers/{destination}',
+            'job-k-octets': (int(size) + 1023) // 1024,
+        }
+    return jobs
+
+
+def _get_lpstat_jobs(which_jobs='not-completed'):
+    """Read jobs from the scheduler CLI, including CUPS class destinations."""
+    try:
+        result = subprocess.run(
+            ['lpstat', '-W', which_jobs, '-o', '-l'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return _parse_lpstat_jobs(result.stdout)
+    except Exception as exc:
+        logger.debug("lpstat job discovery failed: %s", exc)
+        return {}
+
+
+def _get_connection_jobs(conn, which_jobs='not-completed'):
+    """Return pycups jobs merged with destinations only visible to lpstat."""
+    jobs = dict(conn.getJobs(which_jobs=which_jobs))
+    lpstat_jobs = _get_lpstat_jobs(which_jobs)
+    for job_id, cli_info in lpstat_jobs.items():
+        jobs.setdefault(job_id, {}).update({
+            key: value for key, value in cli_info.items()
+            if key not in jobs.get(job_id, {})
+        })
+    return jobs, lpstat_jobs
+
+
 def get_user_jobs(username=None, db=None):
     """Get all print jobs, optionally filtered by username.
     If db is provided, overlays real username from app database.
     """
     try:
         conn = get_cups_connection()
-        jobs = conn.getJobs(which_jobs='not-completed')
+        # pycups can omit jobs submitted to a CUPS class, notably the dedicated
+        # Samba/Windows destination. Merge the scheduler's own view so those
+        # jobs remain visible on the dashboard and kiosk.
+        jobs, lpstat_jobs = _get_connection_jobs(conn)
 
         job_list = []
         for job_id, job_info in jobs.items():
@@ -171,8 +231,18 @@ def get_user_jobs(username=None, db=None):
             except Exception:
                 pass
 
+            # CUPS privacy defaults return the literal value "Withheld" to
+            # unauthenticated readers. Prefer the owner reported locally by
+            # lpstat so matching AirPrint and Samba identities auto-bind.
+            if not _usable_job_owner(job_info.get('job-originating-user-name')):
+                cli_owner = _usable_job_owner(
+                    lpstat_jobs.get(job_id, {}).get('job-originating-user-name')
+                )
+                if cli_owner:
+                    job_info['job-originating-user-name'] = cli_owner
+
             # Fallback: if pycups didn't return key fields, use command-line tools
-            if 'job-originating-user-name' not in job_info or not _cups_job_name(job_info, job_id):
+            if not _usable_job_owner(job_info.get('job-originating-user-name')) or not _cups_job_name(job_info, job_id):
                 try:
                     # Try multiple commands to find job info
                     for cmd in [
@@ -190,14 +260,14 @@ def get_user_jobs(username=None, db=None):
                                 if f'-{job_id} ' in line and not line.startswith(' '):
                                     parts = line.split()
                                     if len(parts) >= 2:
-                                        if 'job-originating-user-name' not in job_info:
+                                        if not _usable_job_owner(job_info.get('job-originating-user-name')):
                                             job_info['job-originating-user-name'] = parts[1]
                                 # lpq format: "username: Nth  [job N localhost]"
                                 elif f'job {job_id}' in line.lower():
                                     parts = line.split(':')
                                     if len(parts) >= 1 and parts[0].strip():
                                         user = parts[0].strip()
-                                        if 'job-originating-user-name' not in job_info:
+                                        if not _usable_job_owner(job_info.get('job-originating-user-name')):
                                             job_info['job-originating-user-name'] = user
                                         if not _cups_job_name(job_info, job_id):
                                             for detail in lines[index + 1:]:
@@ -207,13 +277,13 @@ def get_user_jobs(username=None, db=None):
                                                 if _usable_job_name(candidate, job_id):
                                                     job_info['job-name'] = candidate
                                                 break
-                            if 'job-originating-user-name' in job_info:
+                            if _usable_job_owner(job_info.get('job-originating-user-name')):
                                 break  # Found it, stop trying commands
                 except Exception as exc:
                     logger.debug("CUPS CLI fallback failed: %s", exc)
 
             # Get real username from app database if available
-            display_user = job_info.get('job-originating-user-name', 'Unknown')
+            display_user = _usable_job_owner(job_info.get('job-originating-user-name')) or 'Unknown'
             submitted_via = 'ipp'
             meta = None
             if db:
@@ -288,24 +358,25 @@ def _get_job_owner(conn, job_id, jobs_dict):
     # Try pycups first
     try:
         attrs = conn.getJobAttributes(job_id)
-        owner = attrs.get('job-originating-user-name', '')
+        owner = _usable_job_owner(attrs.get('job-originating-user-name', ''))
         if owner:
             return owner
     except Exception:
         pass
 
-    owner = jobs_dict.get(job_id, {}).get('job-originating-user-name', '')
+    owner = _usable_job_owner(
+        jobs_dict.get(job_id, {}).get('job-originating-user-name', '')
+    )
     if owner:
         return owner
 
     # Fallback: parse lpstat output (same as get_user_jobs)
     try:
-        result = subprocess.run(['lpstat', '-o', '-l'], capture_output=True, text=True, timeout=5)
-        for line in result.stdout.split('\n'):
-            if f'-{job_id} ' in line and not line.startswith(' '):
-                parts = line.split()
-                if len(parts) >= 2:
-                    return parts[1]
+        owner = _usable_job_owner(
+            _get_lpstat_jobs().get(job_id, {}).get('job-originating-user-name')
+        )
+        if owner:
+            return owner
     except Exception as exc:
         logger.debug("lpstat owner fallback failed: %s", exc)
 
@@ -316,7 +387,7 @@ def release_job(job_id, username=None, is_admin=False):
     """Release a held job to start printing"""
     try:
         conn = get_cups_connection()
-        jobs = conn.getJobs()
+        jobs, _lpstat_jobs = _get_connection_jobs(conn)
 
         if job_id not in jobs:
             return False, 'Job not found', 404
@@ -356,7 +427,7 @@ def cancel_job(job_id, username=None, is_admin=False):
     """Cancel a job"""
     try:
         conn = get_cups_connection()
-        jobs = conn.getJobs()
+        jobs, _lpstat_jobs = _get_connection_jobs(conn)
 
         if job_id not in jobs:
             return False, 'Job not found', 404
@@ -453,7 +524,7 @@ def get_job_info(job_id, db=None):
     """Get detailed info about a specific job"""
     try:
         conn = get_cups_connection()
-        jobs = conn.getJobs(which_jobs='all')
+        jobs, lpstat_jobs = _get_connection_jobs(conn, which_jobs='all')
 
         if job_id not in jobs:
             return None
@@ -466,11 +537,16 @@ def get_job_info(job_id, db=None):
         meta = db.get_job_meta(job_id) if db else None
         cups_name = _cups_job_name(job_info, job_id)
         metadata_name = _usable_job_name(meta.get('original_filename'), job_id) if meta else None
+        display_owner = _usable_job_owner(
+            job_info.get('job-originating-user-name')
+        ) or _usable_job_owner(
+            lpstat_jobs.get(job_id, {}).get('job-originating-user-name')
+        ) or 'Unknown'
         return {
             'id': job_id,
             'name': metadata_name or cups_name or f'Document #{job_id}',
             'original_filename': metadata_name or cups_name,
-            'user': job_info.get('job-originating-user-name', 'Unknown'),
+            'user': display_owner,
             'printer': job_info.get('printer-uri', '').split('/')[-1],
             'state': job_info.get('job-state', 0),
             'state_text': get_job_state_text(job_info.get('job-state', 0)),

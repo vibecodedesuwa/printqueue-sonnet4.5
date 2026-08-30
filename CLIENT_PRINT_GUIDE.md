@@ -88,9 +88,20 @@ Windows driver package. Install the printer manufacturer's Windows driver first,
 then add a local printer whose port is the authenticated SMB share. Do **not** use
 `Add-Printer -ConnectionName` for this share: that invokes Point-and-Print and can
 fail with `0x8007007b` because PrintQ has no server-hosted driver package.
-The server keeps Samba's SPOOLSS RPC interface enabled but runs it inside `smbd`,
-avoiding the external `rpcd_spoolss` `printer_list.tdb`/identity regression
-present in some Samba 4.23 builds.
+On SELinux-enabled EL10 systems, the setup script prepares Samba's printer cache
+and installs a narrow local policy allowing `rpcd_spoolss` to read the
+`samba-bgqd` PID file. It does not disable SELinux or make Samba permissive.
+
+Use a Type 3 Windows driver (`MajorVersion 3`). Type 4/filter-pipeline drivers
+can fall back to server-side rendering and fail with Event 824 / `0x800706BA`,
+because PrintQ intentionally does not host a Windows driver package. The bundled
+PowerShell installer rejects Type 4 drivers before creating the queue.
+
+For Windows 10, the inbox **MS Publisher Color Printer** Type 3 PostScript
+driver is a suitable generic choice. PrintQ preserves the PostScript document
+format and lets CUPS/HPLIP convert it for the physical printer. Vendor-specific
+finishing controls may be unavailable, but ordinary color, paper size, and
+orientation settings remain usable.
 
 Run the included installer from an elevated PowerShell window, using the exact
 driver name shown by `Get-PrinterDriver`:

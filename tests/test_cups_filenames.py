@@ -26,6 +26,14 @@ class FakeConnection:
         return dict(self.attributes)
 
 
+class EmptyConnection:
+    def getJobs(self, **_kwargs):
+        return {}
+
+    def getJobAttributes(self, _job_id):
+        return {}
+
+
 class FakeDatabase:
     def __init__(self, metadata=None):
         self.metadata = metadata
@@ -72,6 +80,40 @@ class CupsFilenameTests(unittest.TestCase):
             jobs = self.module.get_all_jobs(db=database)
         self.assertEqual(jobs[0]["name"], "meeting-notes.pdf")
         self.assertEqual(database.saved[0][1]["original_filename"], "meeting-notes.pdf")
+
+    def test_withheld_owner_is_recovered_from_lpstat(self):
+        connection = FakeConnection({
+            "job-originating-user-name": "Withheld",
+            "job-name": "Test Page",
+            "job-state": 4,
+            "time-at-creation": 1,
+        })
+        lpstat = "es_non01_st515_01-21 ECHOSTORY\\alice 1024 Sun 30 Aug 2026\n"
+        with patch.object(self.module, "get_cups_connection", return_value=connection), patch.object(
+            self.module.subprocess,
+            "run",
+            return_value=types.SimpleNamespace(stdout=lpstat),
+        ):
+            jobs = self.module.get_user_jobs("alice", db=FakeDatabase())
+        self.assertEqual(jobs[0]["user"], r"ECHOSTORY\alice")
+
+    def test_lpstat_only_windows_class_job_is_visible(self):
+        lpstat = (
+            "es_non01_st515_01_windows-57 ECHOSTORY\\alice 2048 "
+            "Sun 30 Aug 2026\n"
+        )
+        with patch.object(
+            self.module, "get_cups_connection", return_value=EmptyConnection()
+        ), patch.object(
+            self.module.subprocess,
+            "run",
+            return_value=types.SimpleNamespace(stdout=lpstat),
+        ):
+            jobs = self.module.get_all_jobs(db=FakeDatabase())
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(jobs[0]["id"], 57)
+        self.assertEqual(jobs[0]["printer"], "es_non01_st515_01_windows")
+        self.assertEqual(jobs[0]["user"], r"ECHOSTORY\alice")
 
 
 if __name__ == "__main__":

@@ -149,9 +149,13 @@ These are planned or exploratory directions, not committed release dates:
 
 - **Multiple-printer support** — manage several queues, capabilities, locations,
   routing rules, defaults, and per-printer permissions from one PrintQ server.
-- **Generic and vendor-specific drivers** — prefer driverless IPP Everywhere
-  where possible, while investigating optional PPD/backend packages for specific
-  brands and models whose advanced features require a manufacturer driver.
+- ✅ **Generic Windows PostScript printing** — implemented through a client-side
+  Type 3 PostScript driver, with CUPS/HPLIP converting the job for the physical
+  printer. Driverless IPP Everywhere remains preferred on compatible clients.
+- **Vendor-specific Windows drivers** — investigate optional Type 3 driver,
+  PPD, and backend packages for brands and models whose advanced finishing or
+  device controls require manufacturer support. Type 4 filter-pipeline drivers
+  are not currently compatible with PrintQ's Samba Local Port workflow.
 - **Home Assistant and observability integrations** — expose printer/job health
   through webhooks, MQTT, Prometheus-compatible metrics, and dashboards suitable
   for Home Assistant and Grafana.

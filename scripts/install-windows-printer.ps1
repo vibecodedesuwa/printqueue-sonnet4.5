@@ -28,6 +28,10 @@ if (-not $driver) {
     throw "Printer driver '$DriverName' is not installed. Install it first and use its exact name.`nInstalled drivers:`n$($available -join "`n")"
 }
 
+if ($driver.MajorVersion -ge 4) {
+    throw "Printer driver '$DriverName' is a Type 4/filter-pipeline driver (MajorVersion $($driver.MajorVersion)). PrintQ's client-rendered Samba port requires a Type 3 driver (MajorVersion 3), such as the Windows 'MS Publisher Color Printer' PostScript driver. Install a compatible Type 3 driver, then run this installer with its exact name."
+}
+
 $existingPrinter = Get-Printer -Name $PrinterName -ErrorAction SilentlyContinue
 if ($existingPrinter) {
     if ($existingPrinter.PortName -eq $portName -and

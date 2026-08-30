@@ -42,6 +42,67 @@ ENV_FILE="${1:-$SCRIPT_DIR/../.env}"
 load_samba_settings "$ENV_FILE"
 detect_platform
 
+install_samba_selinux_workaround() {
+    local policy_dir
+
+    [ "$PRINTQ_DISTRO_FAMILY" = "rhel" ] || return 0
+    command -v selinuxenabled >/dev/null 2>&1 || return 0
+    selinuxenabled || return 0
+
+    echo "🔐 Installing the narrow Samba spooler SELinux compatibility rule..."
+    policy_dir=$(mktemp -d)
+    cat > "$policy_dir/printq_samba_spoolss.te" <<'POLICY'
+module printq_samba_spoolss 1.0;
+
+require {
+    type samba_dcerpcd_t;
+    type samba_bgqd_var_run_t;
+    class file { getattr open read };
+}
+
+# EL10 Samba 4.23 runs rpcd_spoolss in samba_dcerpcd_t, but the stock policy
+# can prevent it from reading samba-bgqd.pid while refreshing the CUPS cache.
+allow samba_dcerpcd_t samba_bgqd_var_run_t:file { getattr open read };
+POLICY
+    checkmodule -M -m \
+        -o "$policy_dir/printq_samba_spoolss.mod" \
+        "$policy_dir/printq_samba_spoolss.te"
+    semodule_package \
+        -o "$policy_dir/printq_samba_spoolss.pp" \
+        -m "$policy_dir/printq_samba_spoolss.mod"
+    semodule -i "$policy_dir/printq_samba_spoolss.pp"
+    rm -f \
+        "$policy_dir/printq_samba_spoolss.te" \
+        "$policy_dir/printq_samba_spoolss.mod" \
+        "$policy_dir/printq_samba_spoolss.pp"
+    rmdir "$policy_dir"
+}
+
+prepare_samba_printer_cache() {
+    local lock_dir domain_users_gid cache_file
+
+    [ "$PRINTQ_DISTRO_FAMILY" = "rhel" ] || return 0
+    lock_dir=$(smbd -b | awk -F': ' '/^[[:space:]]*LOCKDIR:/ {print $2; exit}')
+    if [ -z "$lock_dir" ] || [ ! -d "$lock_dir" ]; then
+        echo "❌ Samba's compiled lock directory could not be found."
+        return 1
+    fi
+
+    domain_users_gid=$(getent group "${SAMBA_WORKGROUP}\\domain users" | cut -d: -f3)
+    if [ -z "$domain_users_gid" ]; then
+        echo "❌ Winbind cannot resolve '${SAMBA_WORKGROUP}\\domain users'."
+        echo "   The Samba printer cache cannot be prepared safely."
+        return 1
+    fi
+
+    cache_file="$lock_dir/printer_list.tdb"
+    touch "$cache_file"
+    chown root:"$domain_users_gid" "$cache_file"
+    chmod 0660 "$cache_file"
+    command -v restorecon >/dev/null 2>&1 && restorecon -F "$cache_file" || true
+    echo "✅ Samba printer cache prepared at $cache_file"
+}
+
 PRINTER_NAME="${PRINTER_NAME:-}"
 SAMBA_REALM="${SAMBA_REALM:-}"
 SAMBA_WORKGROUP="${SAMBA_WORKGROUP:-}"
@@ -111,7 +172,7 @@ if [ "$PRINTQ_DISTRO_FAMILY" = "rhel" ]; then
     package_install \
         realmd oddjob-mkhomedir samba samba-client samba-common-tools \
         samba-winbind samba-winbind-clients samba-winbind-krb5-locator \
-        krb5-workstation
+        krb5-workstation checkpolicy policycoreutils policycoreutils-devel
 else
     package_install \
         realmd samba smbclient winbind libnss-winbind libpam-winbind \
@@ -219,12 +280,9 @@ cat > /etc/samba/smb.conf <<EOF
     lpq cache time = 30
     # Only publish the explicitly configured PrintQ share.
     load printers = no
-    # Keep SPOOLSS available for Windows 10/11 Local Port clients, but run it
-    # inside smbd. Some Samba 4.23 builds lose the authenticated RPC handle in
-    # the external rpcd_spoolss worker and repeatedly fail to open
-    # printer_list.tdb while impersonating the user.
-    rpc_daemon:spoolssd = embedded
-    rpc_server:spoolss = embedded
+    # Keep SPOOLSS available for Windows Local Port clients. EL10 Samba 4.23
+    # runs this through rpcd_spoolss; setup prepares its cache and installs the
+    # narrow SELinux access it requires above.
     map to guest = never
 
 # Hidden template used by Samba's SPOOLSS/client-driver print paths. Individual
@@ -241,7 +299,9 @@ cat > /etc/samba/smb.conf <<EOF
     read only = yes
     create mask = 0600
     use client driver = yes
-    cups options = "raw job-hold-until=indefinite"
+    # Preserve the client's document format so CUPS can detect and convert a
+    # generic Type 3 PostScript job through the physical queue's HPLIP filters.
+    cups options = "job-hold-until=indefinite"
 
 [$SAMBA_SHARE_NAME]
     comment = PrintQ AD-authenticated Windows queue
@@ -259,7 +319,7 @@ cat > /etc/samba/smb.conf <<EOF
     # Force every Windows submission to remain visible in CUPS and PrintQ.
     # Some Windows drivers explicitly submit no-hold and otherwise override the
     # queue's job-hold-until-default value.
-    cups options = "raw job-hold-until=indefinite"
+    cups options = "job-hold-until=indefinite"
 EOF
 
 if ! testparm -s /etc/samba/smb.conf >/dev/null; then
@@ -275,14 +335,15 @@ else
     SMB_SERVICE=smbd
 fi
 service_enable_start "$WINBIND_SERVICE"
+install_samba_selinux_workaround
+prepare_samba_printer_cache
 service_enable_start "$SMB_SERVICE"
 if systemctl cat samba-bgqd.service >/dev/null 2>&1; then
     systemctl enable samba-bgqd.service
 fi
 
 # setup-windows-samba.sh is intentionally rerunnable. Fully stop the printing
-# processes before changing between external and embedded SPOOLSS; a simple
-# reload/restart can leave detached rpcd_spoolss workers using the old mode.
+# processes so workers consume the new configuration, cache, and SELinux rule.
 systemctl stop "$SMB_SERVICE"
 if systemctl cat samba-bgqd.service >/dev/null 2>&1; then
     systemctl stop samba-bgqd.service

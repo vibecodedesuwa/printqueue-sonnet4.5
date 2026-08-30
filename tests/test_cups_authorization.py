@@ -31,6 +31,11 @@ class FakeConnection:
         return 13
 
 
+class ClassOnlyConnection(FakeConnection):
+    def getJobs(self, **_kwargs):
+        return {}
+
+
 class FakeDatabase:
     def get_device_mapping(self, _owner):
         return None
@@ -110,6 +115,28 @@ class CupsAuthorizationTests(unittest.TestCase):
         with patch.object(self.module, "get_cups_connection", return_value=connection):
             self.module.submit_print_job("/tmp/example.pdf", "example.pdf", "PrintQ")
         self.assertEqual(connection.printed[0][3]["job-hold-until"], "indefinite")
+
+    def test_kiosk_can_release_job_discovered_only_through_lpstat(self):
+        connection = ClassOnlyConnection(r"ECHOSTORY\alice")
+        with patch.object(
+            self.module, "get_cups_connection", return_value=connection
+        ), patch.object(
+            self.module,
+            "_get_lpstat_jobs",
+            return_value={
+                12: {
+                    "job-originating-user-name": r"ECHOSTORY\alice",
+                    "printer-uri": "ipp://localhost/classes/printq_windows",
+                }
+            },
+        ), patch.object(
+            self.module,
+            "get_printer_status",
+            return_value={"safe_to_release": True},
+        ):
+            result = self.module.release_job(12, is_admin=True)
+        self.assertEqual(result, (True, "Job released", 200))
+        self.assertEqual(connection.released, [(12, "no-hold")])
 
 
 if __name__ == "__main__":
