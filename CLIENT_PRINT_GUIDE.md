@@ -88,8 +88,8 @@ Windows driver package. Install the printer manufacturer's Windows driver first,
 then add a local printer whose port is the authenticated SMB share. Do **not** use
 `Add-Printer -ConnectionName` for this share: that invokes Point-and-Print and can
 fail with `0x8007007b` because PrintQ has no server-hosted driver package.
-The server disables Samba's SPOOLSS RPC interface for this share and uses the
-authenticated SMB print path, avoiding the `printer_list.tdb`/identity regression
+The server keeps Samba's SPOOLSS RPC interface enabled but runs it inside `smbd`,
+avoiding the external `rpcd_spoolss` `printer_list.tdb`/identity regression
 present in some Samba 4.23 builds.
 
 Run the included installer from an elevated PowerShell window, using the exact

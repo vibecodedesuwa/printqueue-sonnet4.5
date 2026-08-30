@@ -219,16 +219,15 @@ cat > /etc/samba/smb.conf <<EOF
     lpq cache time = 30
     # Only publish the explicitly configured PrintQ share.
     load printers = no
-    # PrintQ deliberately uses a locally installed Windows driver and does not
-    # host Point-and-Print packages. Avoid rpcd_spoolss entirely: Samba 4.23 can
-    # lose the authenticated RPC handle while impersonating the user and then
-    # repeatedly fail to create printer_list.tdb. Windows Local Ports fall back
-    # to the authenticated SMB print path, which is all this share requires.
-    disable spoolss = yes
+    # Keep SPOOLSS available for Windows 10/11 Local Port clients, but run it
+    # inside smbd. Some Samba 4.23 builds lose the authenticated RPC handle in
+    # the external rpcd_spoolss worker and repeatedly fail to open
+    # printer_list.tdb while impersonating the user.
+    rpc_server:spoolss = embedded
     map to guest = never
 
-# Hidden template used by Samba's client-driver print path. Individual queues
-# are still exposed explicitly.
+# Hidden template used by Samba's SPOOLSS/client-driver print paths. Individual
+# queues are still exposed explicitly.
 [printers]
     comment = PrintQ CUPS printer template
     # Use the distribution-supported temporary spool location. On enforcing
