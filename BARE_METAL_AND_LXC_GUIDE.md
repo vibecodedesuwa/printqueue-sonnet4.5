@@ -915,6 +915,9 @@ building. It prevents an upstream nil-pointer panic when Kerberos configuration
 cannot be loaded, avoids logging the issuer's full configuration, and supports
 `CERTSRV_KRB5_CONFIG` when Caddy needs a dedicated Kerberos configuration file.
 After updating PrintQ, rebuild and reinstall the binary to receive these fixes.
+On EL10, setup automatically creates `/etc/caddy/krb5-certsrv.conf` when the
+system file uses `dns_canonicalize_hostname = fallback`; Samba, SSSD, and the
+host-wide `/etc/krb5.conf` remain unchanged.
 
 ---
 

@@ -90,6 +90,32 @@ if [ ! -r "$CERTSRV_KEYTAB_PATH" ]; then
 fi
 
 CERTSRV_KRB5_CONFIG=${CERTSRV_KRB5_CONFIG:-/etc/krb5.conf}
+
+# MIT Kerberos on current EL releases accepts "fallback" here, while the
+# gokrb5 parser used by caddy-certsrv accepts only a boolean. Preserve the host
+# configuration used by Samba/Winbind and SSSD, and give Caddy a private,
+# compatible copy instead.
+if [ "$CERTSRV_KRB5_CONFIG" = /etc/krb5.conf ] && \
+   grep -Eq '^[[:space:]]*dns_canonicalize_hostname[[:space:]]*=[[:space:]]*fallback([[:space:]]*(#.*)?)?$' /etc/krb5.conf; then
+    caddy_krb5_config=/etc/caddy/krb5-certsrv.conf
+    caddy_krb5_temp=$(mktemp /etc/caddy/.krb5-certsrv.conf.XXXXXX)
+    sed -E 's/^([[:space:]]*dns_canonicalize_hostname[[:space:]]*=[[:space:]]*)fallback([[:space:]]*(#.*)?)$/\1false\2/' \
+        /etc/krb5.conf > "$caddy_krb5_temp"
+    install -o root -g caddy -m 0640 "$caddy_krb5_temp" "$caddy_krb5_config"
+    rm -f -- "$caddy_krb5_temp"
+    command -v restorecon >/dev/null 2>&1 && restorecon -v "$caddy_krb5_config" >/dev/null 2>&1 || true
+
+    if grep -q '^CERTSRV_KRB5_CONFIG=' "$CERTSRV_ENV"; then
+        sed -i "s|^CERTSRV_KRB5_CONFIG=.*|CERTSRV_KRB5_CONFIG=$caddy_krb5_config|" "$CERTSRV_ENV"
+    else
+        printf '\n# Caddy-compatible copy; the host Kerberos configuration is unchanged.\nCERTSRV_KRB5_CONFIG=%s\n' \
+            "$caddy_krb5_config" >> "$CERTSRV_ENV"
+    fi
+    CERTSRV_KRB5_CONFIG=$caddy_krb5_config
+    export CERTSRV_KRB5_CONFIG
+    echo "✅ Created Caddy-compatible Kerberos configuration at $caddy_krb5_config"
+fi
+
 if [ ! -r "$CERTSRV_KRB5_CONFIG" ]; then
     echo "❌ Kerberos configuration is not readable: $CERTSRV_KRB5_CONFIG" >&2
     exit 1

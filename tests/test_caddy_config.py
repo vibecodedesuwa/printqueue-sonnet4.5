@@ -46,6 +46,11 @@ class CaddyConfigTests(unittest.TestCase):
         self.assertIn('case "krb5_config":', self.plugin_patch)
         self.assertNotIn('log.Printf("certSrv:', self.plugin_patch)
 
+    def test_setup_preserves_host_kerberos_config_on_el10(self):
+        self.assertIn("dns_canonicalize_hostname", self.setup_script)
+        self.assertIn("/etc/caddy/krb5-certsrv.conf", self.setup_script)
+        self.assertIn("CERTSRV_KRB5_CONFIG=$caddy_krb5_config", self.setup_script)
+
 
 if __name__ == "__main__":
     unittest.main()
