@@ -917,7 +917,10 @@ cannot be loaded, avoids logging the issuer's full configuration, and supports
 After updating PrintQ, rebuild and reinstall the binary to receive these fixes.
 On EL10, setup automatically creates `/etc/caddy/krb5-certsrv.conf` when the
 system file uses `dns_canonicalize_hostname = fallback`; Samba, SSSD, and the
-host-wide `/etc/krb5.conf` remain unchanged.
+host-wide `/etc/krb5.conf` remain unchanged. Set `CERTSRV_KDCS` in
+`/etc/caddy/certsrv.env` to a comma-separated list of AD domain-controller DNS
+names or addresses so the older Kerberos client does not depend on DNS SRV
+discovery.
 
 ---
 

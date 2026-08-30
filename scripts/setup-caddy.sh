@@ -90,17 +90,47 @@ if [ ! -r "$CERTSRV_KEYTAB_PATH" ]; then
 fi
 
 CERTSRV_KRB5_CONFIG=${CERTSRV_KRB5_CONFIG:-/etc/krb5.conf}
+CERTSRV_KDCS=${CERTSRV_KDCS:-}
 
 # MIT Kerberos on current EL releases accepts "fallback" here, while the
 # gokrb5 parser used by caddy-certsrv accepts only a boolean. Preserve the host
-# configuration used by Samba/Winbind and SSSD, and give Caddy a private,
-# compatible copy instead.
-if [ "$CERTSRV_KRB5_CONFIG" = /etc/krb5.conf ] && \
-   grep -Eq '^[[:space:]]*dns_canonicalize_hostname[[:space:]]*=[[:space:]]*fallback([[:space:]]*(#.*)?)?$' /etc/krb5.conf; then
-    caddy_krb5_config=/etc/caddy/krb5-certsrv.conf
+# configuration used by Samba/Winbind and SSSD, and give Caddy a private copy.
+# The old library also needs DNS KDC discovery enabled or explicit KDC entries.
+caddy_krb5_config=/etc/caddy/krb5-certsrv.conf
+generate_caddy_krb5=false
+if [ "$CERTSRV_KRB5_CONFIG" = "$caddy_krb5_config" ]; then
+    generate_caddy_krb5=true
+elif [ "$CERTSRV_KRB5_CONFIG" = /etc/krb5.conf ] && \
+     { [ -n "$CERTSRV_KDCS" ] || \
+       grep -Eq '^[[:space:]]*dns_canonicalize_hostname[[:space:]]*=[[:space:]]*fallback([[:space:]]*(#.*)?)?$' /etc/krb5.conf; }; then
+    generate_caddy_krb5=true
+fi
+
+if [ "$generate_caddy_krb5" = true ]; then
     caddy_krb5_temp=$(mktemp /etc/caddy/.krb5-certsrv.conf.XXXXXX)
     sed -E 's/^([[:space:]]*dns_canonicalize_hostname[[:space:]]*=[[:space:]]*)fallback([[:space:]]*(#.*)?)$/\1false\2/' \
         /etc/krb5.conf > "$caddy_krb5_temp"
+
+    printf '\n[libdefaults]\n default_realm = %s\n dns_lookup_kdc = true\n' \
+        "$CERTSRV_REALM" >> "$caddy_krb5_temp"
+
+    first_kdc=
+    if [ -n "$CERTSRV_KDCS" ]; then
+        printf '\n[realms]\n %s = {\n' "$CERTSRV_REALM" >> "$caddy_krb5_temp"
+        for kdc in ${CERTSRV_KDCS//,/ }; do
+            if ! [[ "$kdc" =~ ^[A-Za-z0-9._:-]+$ ]]; then
+                rm -f -- "$caddy_krb5_temp"
+                echo "❌ Invalid KDC hostname/address in CERTSRV_KDCS: $kdc" >&2
+                exit 1
+            fi
+            [ -n "$first_kdc" ] || first_kdc=$kdc
+            printf '  kdc = %s\n' "$kdc" >> "$caddy_krb5_temp"
+        done
+        printf '  admin_server = %s\n }\n' "$first_kdc" >> "$caddy_krb5_temp"
+    else
+        echo "⚠️  CERTSRV_KDCS is empty; Caddy will rely on AD DNS SRV discovery."
+    fi
+
     install -o root -g caddy -m 0640 "$caddy_krb5_temp" "$caddy_krb5_config"
     rm -f -- "$caddy_krb5_temp"
     command -v restorecon >/dev/null 2>&1 && restorecon -v "$caddy_krb5_config" >/dev/null 2>&1 || true

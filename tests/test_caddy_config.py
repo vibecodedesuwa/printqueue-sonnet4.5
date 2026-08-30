@@ -50,6 +50,9 @@ class CaddyConfigTests(unittest.TestCase):
         self.assertIn("dns_canonicalize_hostname", self.setup_script)
         self.assertIn("/etc/caddy/krb5-certsrv.conf", self.setup_script)
         self.assertIn("CERTSRV_KRB5_CONFIG=$caddy_krb5_config", self.setup_script)
+        self.assertIn("CERTSRV_KDCS", self.setup_script)
+        self.assertIn("dns_lookup_kdc = true", self.setup_script)
+        self.assertIn("admin_server = %s", self.setup_script)
 
 
 if __name__ == "__main__":
