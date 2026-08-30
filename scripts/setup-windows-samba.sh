@@ -223,6 +223,7 @@ cat > /etc/samba/smb.conf <<EOF
     # inside smbd. Some Samba 4.23 builds lose the authenticated RPC handle in
     # the external rpcd_spoolss worker and repeatedly fail to open
     # printer_list.tdb while impersonating the user.
+    rpc_daemon:spoolssd = embedded
     rpc_server:spoolss = embedded
     map to guest = never
 
@@ -279,12 +280,19 @@ if systemctl cat samba-bgqd.service >/dev/null 2>&1; then
     systemctl enable samba-bgqd.service
 fi
 
-# setup-windows-samba.sh is intentionally rerunnable. Restart existing daemons
-# so they all consume the newly generated configuration immediately.
-systemctl restart "$WINBIND_SERVICE"
-systemctl restart "$SMB_SERVICE"
+# setup-windows-samba.sh is intentionally rerunnable. Fully stop the printing
+# processes before changing between external and embedded SPOOLSS; a simple
+# reload/restart can leave detached rpcd_spoolss workers using the old mode.
+systemctl stop "$SMB_SERVICE"
 if systemctl cat samba-bgqd.service >/dev/null 2>&1; then
-    systemctl restart samba-bgqd.service
+    systemctl stop samba-bgqd.service
+fi
+pkill -TERM -x rpcd_spoolss >/dev/null 2>&1 || true
+
+systemctl restart "$WINBIND_SERVICE"
+systemctl start "$SMB_SERVICE"
+if systemctl cat samba-bgqd.service >/dev/null 2>&1; then
+    systemctl start samba-bgqd.service
 fi
 
 if command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
