@@ -83,19 +83,24 @@ When AD is enabled on CUPS, the phone will prompt for your AD username/password 
 
 For domain-joined Windows computers, use the Samba share configured by `setup-windows-samba.sh`. This avoids the Microsoft IPP Class Driver's CUPS Basic-authentication limitation.
 
-1. Press **Win+R**.
-2. Enter `\\printq.your-domain.local\PrintQ`.
-3. Windows uses the signed-in domain identity automatically.
-4. If Windows requests a driver, select/install the driver for the physical printer. The share uses client-side rendering and does not distribute a driver package.
+The share uses client-side rendering and intentionally does not distribute a
+Windows driver package. Install the printer manufacturer's Windows driver first,
+then add a local printer whose port is the authenticated SMB share. Do **not** use
+`Add-Printer -ConnectionName` for this share: that invokes Point-and-Print and can
+fail with `0x8007007b` because PrintQ has no server-hosted driver package.
 
-Administrators can also connect it from PowerShell:
+Run the included installer from an elevated PowerShell window, using the exact
+driver name shown by `Get-PrinterDriver`:
 
 ```powershell
-Add-Printer -ConnectionName "\\printq.your-domain.local\PrintQ"
+Get-PrinterDriver | Select-Object Name
+.\scripts\install-windows-printer.ps1 `
+    -Server "printq.your-domain.local" `
+    -ShareName "PrintQ" `
+    -DriverName "Your installed printer driver name"
 ```
 
-If Windows reports that it cannot connect or cannot obtain a driver, install the
-printer manufacturer's Windows driver first, then add it with a local SMB port:
+Or configure the same local SMB port through the Windows interface:
 
 1. Open **Control Panel → Devices and Printers → Add a printer**.
 2. Select **The printer that I want isn't listed**.
@@ -106,6 +111,8 @@ printer manufacturer's Windows driver first, then add it with a local SMB port:
 
 This local-port method still authenticates to Samba with the signed-in domain
 identity; it only keeps Windows from trying to download a driver from PrintQ.
+Use the server's FQDN rather than its IP address so Windows can request the
+`cifs/server.domain` Kerberos service ticket.
 
 Jobs enter the dedicated `<printer>_windows` CUPS queue in the held state and appear in the normal PrintQ dashboard under the authenticated AD username.
 
