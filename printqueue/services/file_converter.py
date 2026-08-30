@@ -4,7 +4,6 @@ Handles conversion of uploaded documents to print-ready formats.
 """
 import os
 import subprocess
-import shutil
 
 
 CONVERTIBLE_TYPES = {
@@ -14,7 +13,8 @@ CONVERTIBLE_TYPES = {
     'txt': 'pdf',
 }
 
-DIRECT_PRINT_TYPES = {'pdf', 'png', 'jpg', 'jpeg'}
+DIRECT_PRINT_TYPES = {'pdf'}
+IMAGE_TYPES = {'png', 'jpg', 'jpeg'}
 
 
 def convert_if_needed(filepath):
@@ -24,8 +24,10 @@ def convert_if_needed(filepath):
     if ext in DIRECT_PRINT_TYPES:
         return filepath
 
+    if ext in IMAGE_TYPES:
+        return convert_image_to_pdf(filepath)
+
     if ext in CONVERTIBLE_TYPES:
-        target_format = CONVERTIBLE_TYPES[ext]
         return convert_to_pdf(filepath)
 
     # Unknown type — try to print as-is
@@ -66,6 +68,54 @@ def convert_to_pdf(filepath):
         return filepath
 
 
+def convert_image_to_pdf(filepath, dpi=300, margin_mm=5):
+    """Place a JPEG/PNG on an A4 PDF before handing it to CUPS.
+
+    cups-filters' direct image-to-raster path can stall in
+    cfFilterImageToRaster with some HPLIP queues. A PDF also makes page size,
+    orientation, EXIF rotation, and alpha handling deterministic.
+    """
+    try:
+        from PIL import Image, ImageOps
+
+        with Image.open(filepath) as source:
+            image = ImageOps.exif_transpose(source)
+            image.load()
+
+            if image.mode in ('RGBA', 'LA') or (
+                    image.mode == 'P' and 'transparency' in image.info):
+                rgba = image.convert('RGBA')
+                background = Image.new('RGB', rgba.size, 'white')
+                background.paste(rgba, mask=rgba.getchannel('A'))
+                image = background
+            else:
+                image = image.convert('RGB')
+
+            portrait = image.height >= image.width
+            a4_mm = (210, 297) if portrait else (297, 210)
+            page_size = tuple(round(mm * dpi / 25.4) for mm in a4_mm)
+            margin_px = round(margin_mm * dpi / 25.4)
+            printable_size = (
+                page_size[0] - (2 * margin_px),
+                page_size[1] - (2 * margin_px),
+            )
+            image.thumbnail(printable_size, Image.Resampling.LANCZOS)
+
+            page = Image.new('RGB', page_size, 'white')
+            position = (
+                (page_size[0] - image.width) // 2,
+                (page_size[1] - image.height) // 2,
+            )
+            page.paste(image, position)
+
+            output_path = f"{os.path.splitext(filepath)[0]}.printq.pdf"
+            page.save(output_path, 'PDF', resolution=dpi, quality=95)
+            return output_path
+    except Exception as exc:
+        # Returning the original would silently re-enter the filter path known
+        # to hang. Surface a useful error to the caller instead.
+        raise RuntimeError(f"Unable to prepare image for printing: {exc}") from exc
+
 def validate_file(filepath, max_size_mb=50):
     """Validate file type and size"""
     errors = []
@@ -81,7 +131,7 @@ def validate_file(filepath, max_size_mb=50):
 
     # Check extension
     ext = filepath.rsplit('.', 1)[-1].lower() if '.' in filepath else ''
-    all_allowed = DIRECT_PRINT_TYPES | set(CONVERTIBLE_TYPES.keys())
+    all_allowed = DIRECT_PRINT_TYPES | IMAGE_TYPES | set(CONVERTIBLE_TYPES.keys())
     if ext not in all_allowed:
         errors.append(f'File type .{ext} not supported')
 

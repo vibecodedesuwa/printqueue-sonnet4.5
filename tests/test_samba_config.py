@@ -15,6 +15,12 @@ class SambaConfigTests(unittest.TestCase):
         self.assertIn("job-hold-until-default=indefinite", self.setup_script)
         self.assertNotIn("cups options = raw\n", self.setup_script)
 
+    def test_spoolss_cache_is_enabled_and_queue_mapping_is_preserved(self):
+        self.assertIn("load printers = yes", self.setup_script)
+        self.assertNotIn("load printers = no", self.setup_script)
+        self.assertNotIn("force printername = yes", self.setup_script)
+        self.assertIn("printer name = $SAMBA_WINDOWS_QUEUE", self.setup_script)
+
 
 if __name__ == "__main__":
     unittest.main()

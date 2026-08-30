@@ -221,7 +221,11 @@ cat > /etc/samba/smb.conf <<EOF
     printcap name = cups
     printcap cache time = 60
     lpq cache time = 30
-    load printers = no
+    # rpcd_spoolss still needs Samba's CUPS printer-list database even though
+    # only the explicit PrintQ share is browsable. Disabling printer loading
+    # also disables samba-bgqd's cache housekeeping and leaves
+    # printer_list.tdb missing.
+    load printers = yes
     rpcd_spoolss:idle_seconds = 300
     rpcd_spoolss:num_workers = 5
     map to guest = never
@@ -249,7 +253,9 @@ cat > /etc/samba/smb.conf <<EOF
     read only = yes
     create mask = 0600
     use client driver = yes
-    force printername = yes
+    # Keep the explicit CUPS queue mapping above. "force printername" makes
+    # Samba submit to the share name ($SAMBA_SHARE_NAME) instead, which fails
+    # with WERR_INVALID_NAME when no CUPS queue has that name.
     # Force every Windows submission to remain visible in CUPS and PrintQ.
     # Some Windows drivers explicitly submit no-hold and otherwise override the
     # queue's job-hold-until-default value.
